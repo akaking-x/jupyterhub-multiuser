@@ -1,0 +1,84 @@
+# Environment and secrets
+.env
+*.env.local
+secrets/
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Deployment scripts with credentials
+add_admin_password_manager.py
+check_*.py
+create_admin*.py
+debug_*.py
+deploy_*.py
+disable_*.py
+final_verify.py
+fix_*.py
+full_fix.py
+install_requirements.py
+register_users.py
+set_password.py
+simple_config.py
+ssh_deploy.py
+update_dashboard_with_lab.py
+verify_*.py
+
+# Local files
+*.log
+*.sqlite
+*.db
+nul
+cookies.txt
+response.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary
+*.tmp
+*.bak
+
+# Python embedded (will be downloaded)
+python/
+
+# Local workspace
+workspace/
+workspace.zip
+
+# Tools (Java, cloudflared - download separately)
+tools/
+
+# Jupyter local config
+jupyter_config/
+
+# Local scripts with potential credentials
+dashboard_new.py
+create_single_dashboard.py
+deep_check.py
+add_beautiful_ui.py
+
+# Old documentation
+HUONG_DAN.md
+HUONG_DAN.pdf
+hướng-dẫn-cài-Jupyterlab-lên-usb.md

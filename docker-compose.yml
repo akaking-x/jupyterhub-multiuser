@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  jupyterhub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jupyterhub
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-9999}:9999"
+    environment:
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - APP_PORT=${APP_PORT:-9999}
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-9998}
+      - JUPYTER_BASE_PORT=${JUPYTER_BASE_PORT:-9800}
+    volumes:
+      # Persist user data
+      - jupyterhub_data:/opt/jupyterhub/data
+      - user_homes:/home
+      # Persist logs
+      - jupyterhub_logs:/var/log
+    # Required for user management
+    privileged: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  jupyterhub_data:
+    driver: local
+  user_homes:
+    driver: local
+  jupyterhub_logs:
+    driver: local
+
+# Optional: Add Cloudflare Tunnel
+# Uncomment below to enable
+#
+#   cloudflared:
+#     image: cloudflare/cloudflared:latest
+#     container_name: cloudflared
+#     restart: unless-stopped
+#     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+#     depends_on:
+#       - jupyterhub
+#     environment:
+#       - TUNNEL_URL=http://jupyterhub:9999
