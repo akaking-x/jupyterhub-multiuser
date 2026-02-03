@@ -5372,17 +5372,19 @@ def handle_send_message(data):
         db = get_db()
         _init_messages_collection(db)
 
+        msg_id = str(uuid.uuid4())[:16]
         msg_doc = {
+            '_id': msg_id,
             'from_user': from_user,
             'to_user': to_user,
             'message_type': 'text',
             'content': content,
             'created_at': datetime.utcnow()
         }
-        result = db.messages.insert_one(msg_doc)
+        db.messages.insert_one(msg_doc)
 
         msg_data = {
-            'id': str(result.inserted_id),
+            'id': msg_id,
             'from_user': from_user,
             'to_user': to_user,
             'message_type': 'text',
@@ -6300,7 +6302,33 @@ def api_chat_message_recall():
             {'$set': {'recalled': True, 'recalled_at': datetime.utcnow()}}
         )
 
-        # If it's a file message, optionally delete from S3 (keep for now)
+        # If it's a file message, delete from S3 and update chat_files
+        if msg.get('message_type') == 'file' and msg.get('file_info', {}).get('file_id'):
+            file_id = msg['file_info']['file_id']
+            file_doc = db.chat_files.find_one({'_id': file_id})
+            if file_doc:
+                # Delete from S3
+                try:
+                    cfg = get_chat_s3_config(db)
+                    if cfg:
+                        import boto3
+                        s3 = boto3.client('s3',
+                            endpoint_url=cfg['endpoint_url'],
+                            aws_access_key_id=cfg['access_key'],
+                            aws_secret_access_key=cfg['secret_key'],
+                            region_name=cfg.get('region', 'us-east-1')
+                        )
+                        prefix = cfg.get('prefix', '').strip('/')
+                        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
+                        s3.delete_object(Bucket=cfg['bucket_name'], Key=s3_key)
+                except Exception as e:
+                    app.logger.error(f"Error deleting file from S3: {e}")
+
+                # Mark chat_file as recalled
+                db.chat_files.update_one(
+                    {'_id': file_id},
+                    {'$set': {'recalled': True, 'recalled_at': datetime.utcnow()}}
+                )
 
         # Notify recipient
         if socketio:
