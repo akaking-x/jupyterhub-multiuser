@@ -92,6 +92,14 @@ def get_users():
             users.append({'name': p.pw_name, 'home': p.pw_dir, 'uid': p.pw_uid})
     return sorted(users, key=lambda x: x['name'])
 
+def get_usernames():
+    """Get list of usernames only"""
+    return [u['name'] for u in get_users()]
+
+def user_exists(username):
+    """Check if a user exists in the system"""
+    return username in get_usernames()
+
 def get_user_port(username):
     """Calculate port for user based on UID"""
     try:
@@ -5201,18 +5209,16 @@ def api_chat_users():
     current_user = session['user']
 
     try:
-        db = get_db()
-        users = list(db.users.find(
-            {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user}},
-            {'username': 1, '_id': 0}
-        ))
+        # Get system users (not from MongoDB)
+        system_users = get_usernames()
 
         result = []
-        for u in users:
-            result.append({
-                'username': u['username'],
-                'online': u['username'] in user_sids
-            })
+        for username in system_users:
+            if username != current_user:
+                result.append({
+                    'username': username,
+                    'online': username in user_sids
+                })
 
         # Sort: online first
         result.sort(key=lambda x: (not x['online'], x['username']))
@@ -5310,24 +5316,22 @@ def api_friends_search():
     if 'user' not in session or session.get('is_admin'):
         return jsonify({'error': 'Unauthorized'}), 401
 
-    q = request.args.get('q', '').strip()
+    q = request.args.get('q', '').strip().lower()
     current_user = session['user']
 
     if len(q) < 1:
         return jsonify({'users': []})
 
     try:
-        db = get_db()
-        users = list(db.users.find(
-            {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user, '$regex': q, '$options': 'i'}},
-            {'username': 1, '_id': 0}
-        ).limit(20))
+        # Search from system users
+        system_users = get_usernames()
+        matched = [u for u in system_users if q in u.lower() and u != current_user][:20]
 
         result = []
-        for u in users:
+        for username in matched:
             result.append({
-                'username': u['username'],
-                'online': u['username'] in user_sids
+                'username': username,
+                'online': username in user_sids
             })
 
         return jsonify({'users': result})
@@ -5351,8 +5355,8 @@ def api_friends_add():
         db = get_db()
         _init_friends_collection(db)
 
-        # Check if user exists
-        if not db.users.find_one({'username': target_user, 'role': {'$ne': 'admin'}}):
+        # Check if user exists (system users)
+        if not user_exists(target_user):
             return jsonify({'error': 'User not found'}), 404
 
         # Check if already friends or pending
@@ -5471,7 +5475,7 @@ def api_friends_remove():
 
 @app.route('/api/chat/contacts')
 def api_chat_contacts():
-    """Get contacts: friends + users with recent messages"""
+    """Get contacts: all system users with friend/message info"""
     if 'user' not in session or session.get('is_admin'):
         return jsonify({'error': 'Unauthorized'}), 401
 
@@ -5479,6 +5483,9 @@ def api_chat_contacts():
 
     try:
         db = get_db()
+
+        # Get all system users
+        system_users = set(get_usernames()) - {username}
 
         # Get distinct users from messages (both directions)
         pipeline = [
@@ -5493,35 +5500,46 @@ def api_chat_contacts():
             }}
         ]
 
-        contacts_from_msgs = {doc['_id']: {
-            'last_message': '[File] ' + doc['file_info'].get('filename', '') if doc.get('message_type') == 'file' else doc.get('last_message', ''),
-            'last_time': doc['last_time'].isoformat() if doc.get('last_time') else ''
-        } for doc in db.messages.aggregate(pipeline)}
+        contacts_from_msgs = {}
+        try:
+            for doc in db.messages.aggregate(pipeline):
+                last_msg = doc.get('last_message', '')
+                if doc.get('message_type') == 'file' and doc.get('file_info'):
+                    last_msg = '[File] ' + doc['file_info'].get('filename', '')
+                contacts_from_msgs[doc['_id']] = {
+                    'last_message': last_msg,
+                    'last_time': doc['last_time'].isoformat() if doc.get('last_time') else ''
+                }
+        except:
+            pass
 
         # Get friends
-        friends_docs = list(db.friends.find({
-            '$or': [
-                {'user': username, 'status': 'accepted'},
-                {'friend': username, 'status': 'accepted'}
-            ]
-        }))
-
         friend_set = set()
-        for f in friends_docs:
-            friend_set.add(f['friend'] if f['user'] == username else f['user'])
-
-        # Combine
-        all_contacts = set(contacts_from_msgs.keys()) | friend_set
+        try:
+            friends_docs = list(db.friends.find({
+                '$or': [
+                    {'user': username, 'status': 'accepted'},
+                    {'friend': username, 'status': 'accepted'}
+                ]
+            }))
+            for f in friends_docs:
+                friend_set.add(f['friend'] if f['user'] == username else f['user'])
+        except:
+            pass
 
         # Count unread messages
-        unread_pipeline = [
-            {'$match': {'to_user': username, 'is_read': {'$ne': True}}},
-            {'$group': {'_id': '$from_user', 'count': {'$sum': 1}}}
-        ]
-        unread_counts = {doc['_id']: doc['count'] for doc in db.messages.aggregate(unread_pipeline)}
+        unread_counts = {}
+        try:
+            unread_pipeline = [
+                {'$match': {'to_user': username, 'is_read': {'$ne': True}}},
+                {'$group': {'_id': '$from_user', 'count': {'$sum': 1}}}
+            ]
+            unread_counts = {doc['_id']: doc['count'] for doc in db.messages.aggregate(unread_pipeline)}
+        except:
+            pass
 
         result = []
-        for contact in all_contacts:
+        for contact in system_users:
             msg_info = contacts_from_msgs.get(contact, {})
             result.append({
                 'username': contact,
@@ -5532,9 +5550,13 @@ def api_chat_contacts():
                 'unread': unread_counts.get(contact, 0)
             })
 
-        # Sort: online first, then by last_time
-        result.sort(key=lambda x: (not x['online'], x['last_time'] or ''), reverse=False)
-        result.sort(key=lambda x: not x['online'])
+        # Sort: friends first, then online, then by last_time
+        result.sort(key=lambda x: (
+            not x['is_friend'],      # Friends first
+            not x['online'],          # Then online users
+            not bool(x['last_time']), # Then users with messages
+            x['username']             # Then alphabetically
+        ))
 
         return jsonify({'contacts': result})
     except Exception as e:
