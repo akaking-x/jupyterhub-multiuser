@@ -2658,7 +2658,19 @@ socket.on('new_message',function(data){
 });
 
 socket.on('message_sent',function(data){
-    // Message confirmed sent
+    // Update temp_id with real id from server
+    if(data.temp_id && data.id){
+        var user=data.to_user;
+        var msgs=messages[user]||[];
+        for(var i=0;i<msgs.length;i++){
+            if(msgs[i]._id===data.temp_id){
+                msgs[i]._id=data.id;
+                msgs[i].id=data.id;
+                break;
+            }
+        }
+        renderMessages();
+    }
 });
 
 socket.on('message_history',function(data){
@@ -2895,11 +2907,13 @@ function sendMsg(){
         return;
     }
 
-    socket.emit('send_message',{to_user:selectedUser,content:text});
+    // Generate temp ID for local display (will be updated by server)
+    var tempId='temp_'+Date.now();
+    socket.emit('send_message',{to_user:selectedUser,content:text,temp_id:tempId});
 
     if(!messages[selectedUser])messages[selectedUser]=[];
     var now=new Date().toISOString();
-    messages[selectedUser].push({from_user:currentUser,to_user:selectedUser,content:text,message_type:'text',created_at:now});
+    messages[selectedUser].push({_id:tempId,from_user:currentUser,to_user:selectedUser,content:text,message_type:'text',created_at:now});
 
     // Update contact
     if(!contacts[selectedUser])contacts[selectedUser]={online:false,lastMsg:'',lastTime:'',unread:0};
@@ -2965,9 +2979,10 @@ function confirmSendFile(){
         if(xhr.status===200){
             var resp=JSON.parse(xhr.responseText);
             if(resp.success){
-                // Add file message locally
+                // Add file message locally with message_id for recall
                 if(!messages[selectedUser])messages[selectedUser]=[];
                 messages[selectedUser].push({
+                    _id:resp.message_id,
                     from_user:currentUser,
                     to_user:selectedUser,
                     message_type:'file',
@@ -5523,6 +5538,7 @@ def handle_send_message(data):
 
     to_user = data.get('to_user', '').strip()
     content = data.get('content', '').strip()
+    temp_id = data.get('temp_id', '')
 
     if not to_user or not content:
         return
@@ -5556,7 +5572,8 @@ def handle_send_message(data):
 
         # Send to recipient
         emit('new_message', msg_data, room=to_user)
-        # Echo back to sender
+        # Echo back to sender with temp_id for mapping
+        msg_data['temp_id'] = temp_id
         emit('message_sent', msg_data)
 
     except Exception as e:
@@ -6216,6 +6233,7 @@ def api_chat_upload():
 
         return jsonify({
             'success': True,
+            'message_id': msg_id,  # For recall functionality
             'file_id': file_id,
             'filename': file.filename,
             'size': file_size,
@@ -6463,9 +6481,10 @@ def api_chat_message_recall():
             # Try with ObjectId for old messages
             from bson import ObjectId
             try:
-                msg = db.messages.find_one({'_id': ObjectId(message_id), 'from_user': username})
+                oid = ObjectId(message_id)
+                msg = db.messages.find_one({'_id': oid, 'from_user': username})
                 if msg:
-                    message_id = ObjectId(message_id)  # Use ObjectId for update
+                    message_id = oid  # Use ObjectId for update
             except:
                 pass
 
