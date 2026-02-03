@@ -272,16 +272,22 @@ def _upload_item(client, bucket, base_prefix, username, src_path, dst_path, item
     if os.path.isfile(local_base):
         _upload_file(client, bucket, local_base, s3_base, task)
     elif os.path.isdir(local_base):
+        errors = []
         for root, dirs, files in os.walk(local_base):
             for f in files:
                 local_fp = os.path.join(root, f)
                 rel = os.path.relpath(local_fp, local_base)
                 s3_key = f"{s3_base}/{rel}".replace('\\', '/')
-                _upload_file(client, bucket, local_fp, s3_key, task)
+                try:
+                    _upload_file(client, bucket, local_fp, s3_key, task)
+                except Exception as e:
+                    errors.append(f"{rel}: {e}")
+        if errors:
+            raise Exception(f"{len(errors)} file(s) failed: {errors[0]}")
 
 
 def _upload_file(client, bucket, local_path, s3_key, task):
-    """Upload single file, use put_object for compatibility"""
+    """Upload single file to S3"""
     size = os.path.getsize(local_path)
     task['current_file'] = os.path.basename(local_path)
     if size > MULTIPART_THRESHOLD:
@@ -294,9 +300,10 @@ def _upload_file(client, bucket, local_path, s3_key, task):
         )
         client.upload_file(local_path, bucket, s3_key, Config=config)
     else:
-        # Use put_object with explicit ContentLength for S3-compatible services
+        # Read into bytes so Content-Length is always deterministic
         with open(local_path, 'rb') as f:
-            client.put_object(Bucket=bucket, Key=s3_key, Body=f, ContentLength=size)
+            data = f.read()
+        client.put_object(Bucket=bucket, Key=s3_key, Body=data)
 
 
 def _download_item(client, bucket, base_prefix, username, src_path, dst_path, item_name, task):
