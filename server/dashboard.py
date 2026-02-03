@@ -2091,7 +2091,7 @@ loadWs('');
 </script></body></html>"""
 
 # ===========================================
-# EMBED_CHAT - Realtime chat with users (with friend system)
+# EMBED_CHAT - Realtime chat (friends only, file approval, recall)
 # ===========================================
 
 EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
@@ -2185,8 +2185,7 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
                 <input type="text" id="contact-search" placeholder="Tìm kiếm..." oninput="filterContacts()">
             </div>
             <div class="tabs">
-                <div class="tab active" data-tab="all" onclick="switchTab('all')">Tất cả</div>
-                <div class="tab" data-tab="friends" onclick="switchTab('friends')">Bạn bè</div>
+                <div class="tab active" data-tab="friends" onclick="switchTab('friends')">Bạn bè</div>
                 <div class="tab" data-tab="requests" onclick="switchTab('requests')">Lời mời <span id="request-count"></span></div>
             </div>
             <div class="contact-list" id="contact-list"></div>
@@ -2238,9 +2237,9 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 var socket=io();
 var currentUser='{{ username }}';
 var selectedUser=null;
-var currentTab='all';
-var contacts={};  // username -> {online, isFriend, friendStatus, lastMsg, lastTime, unread}
-var friends={};   // username -> {status: 'accepted'|'pending_sent'|'pending_received'}
+var currentTab='friends';
+var contacts={};  // username -> {online, lastMsg, lastTime, unread}
+var friends={};   // username -> 'accepted'|'pending_sent'|'pending_received'
 var messages={};
 var pendingFile=null;
 var searchTimeout=null;
@@ -2380,40 +2379,21 @@ function updateRequestCount(){
 function renderContacts(){
     var search=document.getElementById('contact-search').value.toLowerCase();
     var html='';
-
-    // Build list based on tab
     var list=[];
 
     if(currentTab==='requests'){
-        // Show pending friend requests received
+        // Show pending friend requests
         Object.keys(friends).forEach(u=>{
             if(friends[u]==='pending_received'){
                 list.push({username:u,type:'request'});
             }
         });
-    }else if(currentTab==='friends'){
-        // Show only accepted friends
-        Object.keys(friends).forEach(u=>{
-            if(friends[u]==='accepted'){
-                var c=contacts[u]||{online:false,lastMsg:'',lastTime:'',unread:0};
-                list.push({username:u,type:'friend',...c});
-            }
-        });
     }else{
-        // All: friends + recent contacts
-        var added={};
-        // Friends first
+        // Friends tab - show accepted friends only
         Object.keys(friends).forEach(u=>{
             if(friends[u]==='accepted'){
                 var c=contacts[u]||{online:false,lastMsg:'',lastTime:'',unread:0};
                 list.push({username:u,type:'friend',...c});
-                added[u]=true;
-            }
-        });
-        // Then other contacts
-        Object.keys(contacts).forEach(u=>{
-            if(!added[u]){
-                list.push({username:u,type:'contact',...contacts[u]});
             }
         });
     }
@@ -2447,9 +2427,7 @@ function renderContacts(){
             html+='<div class="contact-item '+active+'" onclick="selectUser(\\''+u+'\\')">';
             html+='<div class="avatar">'+initial+'</div>';
             html+='<div class="info">';
-            html+='<div class="name">'+(item.online?'<span class="online-dot"></span>':'')+escapeHtml(u);
-            if(item.type==='friend')html+=' <span class="friend-badge">★</span>';
-            html+='</div>';
+            html+='<div class="name">'+(item.online?'<span class="online-dot"></span>':'')+escapeHtml(u)+' <span class="friend-badge">★</span></div>';
             html+='<div class="last-msg">'+(item.lastMsg?escapeHtml(item.lastMsg):'Chưa có tin nhắn')+'</div>';
             html+='</div>';
             html+='<div class="meta">';
@@ -2459,7 +2437,7 @@ function renderContacts(){
         }
     });
 
-    document.getElementById('contact-list').innerHTML=html||'<div style="padding:20px;text-align:center;color:#64748b">Không có liên hệ nào</div>';
+    document.getElementById('contact-list').innerHTML=html||'<div style="padding:20px;text-align:center;color:#64748b">'+(currentTab==='requests'?'Không có lời mời':'Chưa có bạn bè. Nhấn + để tìm kiếm.')+'</div>';
 }
 
 // ===== SELECT USER & CHAT =====
@@ -2510,10 +2488,17 @@ function renderMessages(){
     var html='';
     var lastDate='';
 
-    msgs.forEach(function(m){
+    msgs.forEach(function(m,idx){
+        if(m.recalled){
+            // Show recalled message placeholder
+            html+='<div class="message '+(m.from_user===currentUser?'sent':'received')+'" style="opacity:0.5;font-style:italic">Tin nhắn đã thu hồi</div>';
+            return;
+        }
+
         var sent=m.from_user===currentUser;
         var msgDate=new Date(m.created_at).toLocaleDateString('vi-VN');
         var time=new Date(m.created_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+        var msgId=m._id||m.id||idx;
 
         // Date separator
         if(msgDate!==lastDate){
@@ -2523,14 +2508,36 @@ function renderMessages(){
 
         if(m.message_type==='file'){
             var fi=m.file_info||{};
-            html+='<div class="message file '+(sent?'sent':'received')+'">';
+            var status=fi.status||'accepted';
+            html+='<div class="message file '+(sent?'sent':'received')+'" data-id="'+msgId+'">';
             html+='<div class="file-box"><span class="file-icon">&#128196;</span><div><div class="file-name">'+escapeHtml(fi.filename||'file')+'</div><div class="file-size">'+(fi.size?formatSize(fi.size):'')+'</div></div></div>';
-            if(fi.download_url){
-                html+='<div class="file-actions"><a href="'+fi.download_url+'" class="btn btn-sm btn-primary" download>Tải xuống</a></div>';
+
+            if(!sent && status==='pending'){
+                // Receiver needs to approve
+                html+='<div class="file-actions" style="border-top:1px solid #334155;padding-top:8px;margin-top:8px">';
+                html+='<button class="btn btn-sm btn-success" onclick="acceptFile(\\''+fi.file_id+'\\')">Chấp nhận</button>';
+                html+='<button class="btn btn-sm btn-danger" onclick="rejectFile(\\''+fi.file_id+'\\')">Từ chối</button>';
+                html+='</div>';
+            }else if(status==='accepted' && fi.download_url){
+                // Accepted - show download options
+                html+='<div class="file-actions">';
+                html+='<a href="'+fi.download_url+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
+                html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
+                html+='<button class="btn btn-sm btn-secondary" onclick="saveToS3(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ S3</button>';
+                html+='</div>';
+            }else if(status==='rejected'){
+                html+='<div style="font-size:11px;color:#ef4444;margin-top:6px">Đã từ chối</div>';
             }
-            html+='<div class="time">'+time+'</div></div>';
+
+            html+='<div class="time">'+time;
+            if(sent)html+=' <span style="cursor:pointer;margin-left:6px" onclick="recallMessage(\\''+msgId+'\\','+idx+')" title="Thu hồi">🗑</span>';
+            html+='</div></div>';
         }else{
-            html+='<div class="message '+(sent?'sent':'received')+'">'+escapeHtml(m.content)+'<div class="time">'+time+'</div></div>';
+            html+='<div class="message '+(sent?'sent':'received')+'" data-id="'+msgId+'">';
+            html+=escapeHtml(m.content);
+            html+='<div class="time">'+time;
+            if(sent)html+=' <span style="cursor:pointer;margin-left:6px" onclick="recallMessage(\\''+msgId+'\\','+idx+')" title="Thu hồi">🗑</span>';
+            html+='</div></div>';
         }
     });
 
@@ -2542,6 +2549,12 @@ function sendMsg(){
     var input=document.getElementById('msg-input');
     var text=input.value.trim();
     if(!text||!selectedUser)return;
+
+    // Must be friends to send messages
+    if(friends[selectedUser]!=='accepted'){
+        alert('Bạn phải kết bạn trước khi nhắn tin!');
+        return;
+    }
 
     socket.emit('send_message',{to_user:selectedUser,content:text});
 
@@ -2584,6 +2597,12 @@ function hideFileModal(){
 
 function confirmSendFile(){
     if(!pendingFile||!selectedUser)return;
+
+    // Must be friends to send files
+    if(friends[selectedUser]!=='accepted'){
+        alert('Bạn phải kết bạn trước khi gửi file!');
+        return;
+    }
 
     document.getElementById('send-file-btn').disabled=true;
     document.getElementById('upload-progress').style.display='block';
@@ -2735,6 +2754,88 @@ function removeFriend(username){
     });
 }
 
+// ===== FILE APPROVAL =====
+function acceptFile(fileId){
+    fetch('/api/chat/file/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            // Update local message
+            var msgs=messages[selectedUser]||[];
+            msgs.forEach(m=>{
+                if(m.message_type==='file'&&m.file_info&&m.file_info.file_id===fileId){
+                    m.file_info.status='accepted';
+                    m.file_info.download_url=data.download_url;
+                }
+            });
+            renderMessages();
+        }else{
+            alert(data.error||'Lỗi');
+        }
+    });
+}
+
+function rejectFile(fileId){
+    fetch('/api/chat/file/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            var msgs=messages[selectedUser]||[];
+            msgs.forEach(m=>{
+                if(m.message_type==='file'&&m.file_info&&m.file_info.file_id===fileId){
+                    m.file_info.status='rejected';
+                }
+            });
+            renderMessages();
+        }
+    });
+}
+
+function saveToWorkspace(fileId,filename){
+    fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'workspace'})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            alert('Đã lưu vào Workspace: '+filename);
+        }else{
+            alert(data.error||'Lỗi');
+        }
+    });
+}
+
+function saveToS3(fileId,filename){
+    fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'s3'})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            alert('Đã lưu vào S3 Backup: '+filename);
+        }else{
+            alert(data.error||'Lỗi');
+        }
+    });
+}
+
+// ===== MESSAGE RECALL =====
+function recallMessage(msgId,idx){
+    if(!confirm('Thu hồi tin nhắn này?'))return;
+    fetch('/api/chat/message/recall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:msgId,with_user:selectedUser})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            var msgs=messages[selectedUser]||[];
+            if(msgs[idx])msgs[idx].recalled=true;
+            renderMessages();
+            // Notify via socket
+            socket.emit('message_recalled',{message_id:msgId,to_user:selectedUser});
+        }else{
+            alert(data.error||'Lỗi');
+        }
+    });
+}
+
+socket.on('message_recalled',function(data){
+    var msgs=messages[data.from_user]||[];
+    msgs.forEach(m=>{
+        if((m._id||m.id)===data.message_id)m.recalled=true;
+    });
+    if(selectedUser===data.from_user)renderMessages();
+});
+
 // ===== UTILS =====
 function scrollToBottom(){
     var el=document.getElementById('chat-messages');
@@ -2752,7 +2853,7 @@ function formatTime(iso){
 }
 
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
-function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');}
 
 // Start
 init();
@@ -5475,7 +5576,7 @@ def api_friends_remove():
 
 @app.route('/api/chat/contacts')
 def api_chat_contacts():
-    """Get contacts: all system users with friend/message info"""
+    """Get contacts: only friends with message info"""
     if 'user' not in session or session.get('is_admin'):
         return jsonify({'error': 'Unauthorized'}), 401
 
@@ -5484,8 +5585,22 @@ def api_chat_contacts():
     try:
         db = get_db()
 
-        # Get all system users
-        system_users = set(get_usernames()) - {username}
+        # Get only accepted friends
+        friend_set = set()
+        try:
+            friends_docs = list(db.friends.find({
+                '$or': [
+                    {'user': username, 'status': 'accepted'},
+                    {'friend': username, 'status': 'accepted'}
+                ]
+            }))
+            for f in friends_docs:
+                friend_set.add(f['friend'] if f['user'] == username else f['user'])
+        except:
+            pass
+
+        # Use friend_set instead of all system users
+        system_users = friend_set
 
         # Get distinct users from messages (both directions)
         pipeline = [
@@ -5604,7 +5719,7 @@ def api_chat_upload():
         # Generate download URL
         download_url = f"/api/chat/file/{file_id}"
 
-        # Store file info in database
+        # Store file info in database (status: pending - needs approval)
         db.chat_files.insert_one({
             '_id': file_id,
             'from_user': from_user,
@@ -5612,12 +5727,15 @@ def api_chat_upload():
             'filename': file.filename,
             'size': file_size,
             's3_path': s3_path,
+            'status': 'pending',  # pending -> accepted/rejected
             'created_at': datetime.utcnow()
         })
 
         # Create message record
         _init_messages_collection(db)
+        msg_id = str(uuid.uuid4())[:16]
         msg_doc = {
+            '_id': msg_id,
             'from_user': from_user,
             'to_user': to_user,
             'message_type': 'file',
@@ -5626,7 +5744,7 @@ def api_chat_upload():
                 'file_id': file_id,
                 'filename': file.filename,
                 'size': file_size,
-                'download_url': download_url
+                'status': 'pending'  # No download_url until accepted
             },
             'created_at': datetime.utcnow()
         }
@@ -5635,6 +5753,7 @@ def api_chat_upload():
         # Notify recipient via WebSocket
         if socketio:
             socketio.emit('new_message', {
+                'id': msg_id,
                 'from_user': from_user,
                 'to_user': to_user,
                 'message_type': 'file',
@@ -5643,7 +5762,7 @@ def api_chat_upload():
                     'file_id': file_id,
                     'filename': file.filename,
                     'size': file_size,
-                    'download_url': download_url
+                    'status': 'pending'
                 },
                 'created_at': datetime.utcnow().isoformat()
             }, room=to_user)
@@ -5653,7 +5772,7 @@ def api_chat_upload():
             'file_id': file_id,
             'filename': file.filename,
             'size': file_size,
-            'download_url': download_url
+            'status': 'pending'
         })
 
     except Exception as e:
@@ -5661,7 +5780,7 @@ def api_chat_upload():
 
 @app.route('/api/chat/file/<file_id>')
 def api_chat_file_download(file_id):
-    """Download chat file"""
+    """Download chat file (only if accepted)"""
     if 'user' not in session:
         return 'Unauthorized', 401
 
@@ -5676,9 +5795,12 @@ def api_chat_file_download(file_id):
 
         # Check permission - only sender or recipient can download
         if username != file_doc['from_user'] and username != file_doc['to_user']:
-            # Check if admin
             if not session.get('is_admin'):
                 return 'Forbidden', 403
+
+        # Recipient can only download if accepted (sender can always download)
+        if username == file_doc['to_user'] and file_doc.get('status') != 'accepted':
+            return 'File not accepted yet', 403
 
         # Get shared S3 config
         cfg = get_shared_s3_config(db)
@@ -5698,6 +5820,202 @@ def api_chat_file_download(file_id):
 
     except Exception as e:
         return str(e), 500
+
+
+@app.route('/api/chat/file/accept', methods=['POST'])
+def api_chat_file_accept():
+    """Accept a received file"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    file_id = data.get('file_id', '')
+    username = session['user']
+
+    try:
+        db = get_db()
+        file_doc = db.chat_files.find_one({'_id': file_id, 'to_user': username})
+
+        if not file_doc:
+            return jsonify({'error': 'File not found'}), 404
+
+        if file_doc.get('status') != 'pending':
+            return jsonify({'error': 'File already processed'}), 400
+
+        # Update status
+        db.chat_files.update_one({'_id': file_id}, {'$set': {'status': 'accepted', 'accepted_at': datetime.utcnow()}})
+
+        # Update message
+        db.messages.update_one(
+            {'file_info.file_id': file_id},
+            {'$set': {'file_info.status': 'accepted', 'file_info.download_url': f'/api/chat/file/{file_id}'}}
+        )
+
+        # Notify sender
+        if socketio:
+            socketio.emit('file_status_changed', {
+                'file_id': file_id,
+                'status': 'accepted',
+                'by_user': username
+            }, room=file_doc['from_user'])
+
+        return jsonify({'success': True, 'download_url': f'/api/chat/file/{file_id}'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chat/file/reject', methods=['POST'])
+def api_chat_file_reject():
+    """Reject a received file"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    file_id = data.get('file_id', '')
+    username = session['user']
+
+    try:
+        db = get_db()
+        file_doc = db.chat_files.find_one({'_id': file_id, 'to_user': username})
+
+        if not file_doc:
+            return jsonify({'error': 'File not found'}), 404
+
+        if file_doc.get('status') != 'pending':
+            return jsonify({'error': 'File already processed'}), 400
+
+        # Update status
+        db.chat_files.update_one({'_id': file_id}, {'$set': {'status': 'rejected', 'rejected_at': datetime.utcnow()}})
+
+        # Update message
+        db.messages.update_one(
+            {'file_info.file_id': file_id},
+            {'$set': {'file_info.status': 'rejected'}}
+        )
+
+        # Notify sender
+        if socketio:
+            socketio.emit('file_status_changed', {
+                'file_id': file_id,
+                'status': 'rejected',
+                'by_user': username
+            }, room=file_doc['from_user'])
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chat/file/save', methods=['POST'])
+def api_chat_file_save():
+    """Save accepted file to workspace or S3"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    file_id = data.get('file_id', '')
+    dest = data.get('dest', 'workspace')  # 'workspace' or 's3'
+    username = session['user']
+
+    try:
+        db = get_db()
+        file_doc = db.chat_files.find_one({'_id': file_id})
+
+        if not file_doc:
+            return jsonify({'error': 'File not found'}), 404
+
+        # Check permission
+        if username != file_doc['from_user'] and username != file_doc['to_user']:
+            return jsonify({'error': 'Forbidden'}), 403
+
+        # Must be accepted
+        if file_doc.get('status') != 'accepted' and username == file_doc['to_user']:
+            return jsonify({'error': 'File not accepted'}), 400
+
+        # Get shared S3 config to download from
+        cfg = get_shared_s3_config(db)
+        if not cfg:
+            return jsonify({'error': 'S3 not configured'}), 500
+
+        # Download file from shared S3
+        import boto3
+        s3 = boto3.client('s3',
+            endpoint_url=cfg['endpoint_url'],
+            aws_access_key_id=cfg['access_key'],
+            aws_secret_access_key=cfg['secret_key'],
+            region_name=cfg.get('region', 'us-east-1')
+        )
+
+        response = s3.get_object(Bucket=cfg['bucket_name'], Key=file_doc['s3_path'])
+        file_data = response['Body'].read()
+
+        if dest == 'workspace':
+            # Save to user's workspace
+            workspace_path = f"/home/{username}/workspace/{file_doc['filename']}"
+            os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
+            with open(workspace_path, 'wb') as f:
+                f.write(file_data)
+            return jsonify({'success': True, 'path': file_doc['filename']})
+
+        elif dest == 's3':
+            # Save to user's S3 backup
+            user_s3_cfg = get_s3_config(db, username)
+            if not user_s3_cfg:
+                return jsonify({'error': 'S3 Backup not configured'}), 400
+
+            ok, result = upload_to_s3(user_s3_cfg, '', file_doc['filename'], file_data)
+            if ok:
+                return jsonify({'success': True, 'path': file_doc['filename']})
+            else:
+                return jsonify({'error': result}), 500
+
+        return jsonify({'error': 'Invalid destination'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chat/message/recall', methods=['POST'])
+def api_chat_message_recall():
+    """Recall (delete) a sent message"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    message_id = data.get('message_id', '')
+    with_user = data.get('with_user', '')
+    username = session['user']
+
+    try:
+        db = get_db()
+
+        # Find the message - must be from current user
+        msg = db.messages.find_one({'_id': message_id, 'from_user': username})
+
+        if not msg:
+            return jsonify({'error': 'Message not found or not yours'}), 404
+
+        # Mark as recalled (don't delete, just mark)
+        db.messages.update_one(
+            {'_id': message_id},
+            {'$set': {'recalled': True, 'recalled_at': datetime.utcnow()}}
+        )
+
+        # If it's a file message, optionally delete from S3 (keep for now)
+
+        # Notify recipient
+        if socketio:
+            socketio.emit('message_recalled', {
+                'message_id': message_id,
+                'from_user': username
+            }, room=msg['to_user'])
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
