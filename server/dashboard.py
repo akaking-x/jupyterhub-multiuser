@@ -6347,7 +6347,7 @@ def api_chat_message_recall():
         # Notify recipient
         if socketio:
             socketio.emit('message_recalled', {
-                'message_id': message_id,
+                'message_id': str(message_id),  # Convert ObjectId to string
                 'from_user': username
             }, room=msg['to_user'])
 
