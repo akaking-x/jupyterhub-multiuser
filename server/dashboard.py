@@ -6117,7 +6117,9 @@ def api_chat_file_accept():
         if not file_doc:
             return jsonify({'error': 'File not found'}), 404
 
-        if file_doc.get('status') != 'pending':
+        # Allow pending or missing status (backwards compatibility)
+        current_status = file_doc.get('status', 'pending')
+        if current_status not in ('pending', None):
             return jsonify({'error': 'File already processed'}), 400
 
         # Update status
@@ -6160,7 +6162,9 @@ def api_chat_file_reject():
         if not file_doc:
             return jsonify({'error': 'File not found'}), 404
 
-        if file_doc.get('status') != 'pending':
+        # Allow pending or missing status (backwards compatibility)
+        current_status = file_doc.get('status', 'pending')
+        if current_status not in ('pending', None):
             return jsonify({'error': 'File already processed'}), 400
 
         # Update status
