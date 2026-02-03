@@ -5360,6 +5360,22 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
     </div>
 </div>
 
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#9888; Confirm</h3>
+            <button class="close-btn" onclick="hideConfirmModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="confirm-message" style="font-size:14px;margin:0">Are you sure?</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideConfirmModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirm-btn" onclick="confirmAction()">Delete</button>
+        </div>
+    </div>
+</div>
+
 <script>
 function showToast(message,type='info',duration=3000){
     var container=document.getElementById('toast-container');
@@ -5409,9 +5425,30 @@ function loadSessions(){
     });
 }
 
+var pendingDeleteSession=null;
+var confirmCallback=null;
+
+function showConfirmModal(message,callback){
+    document.getElementById('confirm-message').textContent=message;
+    confirmCallback=callback;
+    document.getElementById('confirm-modal').classList.add('show');
+}
+
+function hideConfirmModal(){
+    document.getElementById('confirm-modal').classList.remove('show');
+    confirmCallback=null;
+}
+
+function confirmAction(){
+    hideConfirmModal();
+    if(confirmCallback)confirmCallback();
+}
+
 function deleteSession(sessionId){
-    if(!confirm('Delete this session?'))return;
-    socket.emit('delete_screen_session',{session_id:sessionId});
+    pendingDeleteSession=sessionId;
+    showConfirmModal('Delete this session?',function(){
+        socket.emit('delete_screen_session',{session_id:pendingDeleteSession});
+    });
 }
 
 function joinByCode(){
@@ -7325,13 +7362,13 @@ def api_users_search():
     current_user = session['user']
 
     try:
-        db = get_db()
-        query = {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user}}
+        # Get system users (Linux users), not MongoDB users
+        all_users = get_usernames()
+        # Filter: exclude current user and admin, apply search query
+        users = [u for u in all_users if u != current_user and u != ADMIN_USER]
         if q:
-            query['username'] = {'$regex': q, '$options': 'i'}
-
-        users = list(db.users.find(query, {'username': 1, '_id': 0}).limit(20))
-        return jsonify({'users': [u['username'] for u in users]})
+            users = [u for u in users if q in u.lower()]
+        return jsonify({'users': users[:20]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -7364,12 +7401,8 @@ def api_share_with_user():
     try:
         db = get_db()
 
-        # Check recipient exists and is not admin
-        recipient = db.users.find_one({
-            'username': to_user,
-            '$or': [{'role': {'$ne': 'admin'}}, {'role': {'$exists': False}}]
-        })
-        if not recipient:
+        # Check recipient exists (system user) and is not admin
+        if not user_exists(to_user) or to_user == ADMIN_USER:
             return jsonify({'error': 'User not found'}), 404
 
         # Get sender's S3 config
