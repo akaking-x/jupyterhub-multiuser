@@ -14,6 +14,9 @@ import pwd
 import os
 import time
 import socket
+import json
+import jwt
+import hashlib
 from datetime import datetime
 
 from pymongo import MongoClient
@@ -37,6 +40,12 @@ from s3_manager import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+
+# OnlyOffice Configuration
+ONLYOFFICE_URL = os.environ.get('ONLYOFFICE_URL', '/onlyoffice')
+ONLYOFFICE_JWT_SECRET = os.environ.get('ONLYOFFICE_JWT_SECRET', 'jupyterhub_onlyoffice_secret_2024')
+# Internal URL for OnlyOffice to fetch files (Docker gateway -> dashboard)
+ONLYOFFICE_FILE_HOST = os.environ.get('ONLYOFFICE_FILE_HOST', 'http://172.17.0.1:9998')
 
 # Configuration from environment
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
@@ -2281,13 +2290,13 @@ VIEWER_OFFICE = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 """ + VIEWER_BASE_CSS + """
 <style>
-.office-frame{width:100%;height:100%;border:none}
-.office-notice{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:40px}
-.office-notice .icon{font-size:80px;margin-bottom:20px}
-.office-notice h2{margin-bottom:16px;color:#f1f5f9}
-.office-notice p{color:#94a3b8;margin-bottom:24px;max-width:500px}
-.office-notice .btn{padding:12px 24px;font-size:15px}
-</style></head><body>
+#onlyoffice-container{width:100%;height:100%}
+.loading-office{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center}
+.loading-office .spinner{width:50px;height:50px;border:4px solid #334155;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+<script src="{{ onlyoffice_url }}/web-apps/apps/api/documents/api.js"></script>
+</head><body>
 <div class="viewer-container">
     <div class="viewer-header">
         <span class="icon">{{ icon }}</span>
@@ -2295,18 +2304,19 @@ VIEWER_OFFICE = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
         <a href="{{ download_url }}" class="btn btn-primary" download><span>&#11015;</span> Download</a>
     </div>
     <div class="viewer-body">
-        {% if viewer_url %}
-        <iframe class="office-frame" src="{{ viewer_url }}"></iframe>
-        {% else %}
-        <div class="office-notice">
-            <div class="icon">{{ icon }}</div>
-            <h2>{{ filename }}</h2>
-            <p>This Office file can be downloaded and opened with Microsoft Office, LibreOffice, or other compatible applications.</p>
-            <a href="{{ download_url }}" class="btn btn-primary" download><span>&#11015;</span> Download File</a>
+        <div id="onlyoffice-container">
+            <div class="loading-office"><div class="spinner"></div><p>Loading document...</p></div>
         </div>
-        {% endif %}
     </div>
 </div>
+<script>
+var config = {{ config_json|safe }};
+config.events = {
+    onDocumentReady: function() { console.log('Document ready'); },
+    onError: function(e) { console.error('OnlyOffice error:', e); }
+};
+new DocsAPI.DocEditor("onlyoffice-container", config);
+</script>
 </body></html>"""
 
 VIEWER_UNSUPPORTED = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
@@ -3323,6 +3333,76 @@ def get_file_type(filename):
     return 'unknown', ext
 
 
+def generate_onlyoffice_token(source, path, username):
+    """Generate a signed token for OnlyOffice file access"""
+    payload = {
+        'source': source,
+        'path': path,
+        'username': username,
+        'exp': int(time.time()) + 3600  # 1 hour expiry
+    }
+    return jwt.encode(payload, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
+
+
+def verify_onlyoffice_token(token):
+    """Verify OnlyOffice file access token"""
+    try:
+        payload = jwt.decode(token, ONLYOFFICE_JWT_SECRET, algorithms=['HS256'])
+        if payload.get('exp', 0) < time.time():
+            return None
+        return payload
+    except:
+        return None
+
+
+@app.route('/api/onlyoffice/file')
+def onlyoffice_file_stream():
+    """Stream file for OnlyOffice (token-based auth)"""
+    token = request.args.get('token', '')
+    payload = verify_onlyoffice_token(token)
+    if not payload:
+        return 'Invalid or expired token', 401
+
+    source = payload['source']
+    path = payload['path']
+    username = payload['username']
+
+    try:
+        db = get_db()
+        if source == 'workspace':
+            result = stream_workspace_file(username, path)
+            if not result:
+                return 'File not found', 404
+            gen, length, ctype, fname = result
+        elif source == 's3':
+            cfg = get_s3_config(db, username)
+            if not cfg:
+                return 'S3 not configured', 400
+            prefix = cfg.get('prefix', '').strip('/')
+            s3_key = f"{prefix}/{path}" if prefix else path
+            gen, length, ctype = stream_s3_object(cfg, s3_key)
+            fname = path.rsplit('/', 1)[-1] if '/' in path else path
+        elif source == 'shared':
+            cfg = get_shared_s3_config(db)
+            if not cfg:
+                return 'Shared space not configured', 400
+            prefix = cfg.get('prefix', '').strip('/')
+            s3_key = f"{prefix}/{path}" if prefix else path
+            gen, length, ctype = stream_s3_object(cfg, s3_key)
+            fname = path.rsplit('/', 1)[-1] if '/' in path else path
+        else:
+            return 'Invalid source', 400
+
+        headers = {
+            'Content-Type': ctype,
+            'Content-Length': length,
+            'Content-Disposition': f'inline; filename="{fname}"',
+        }
+        return Response(gen, headers=headers)
+    except Exception as e:
+        return str(e), 500
+
+
 @app.route('/api/workspace/file')
 def workspace_file_stream():
     """Stream file from workspace"""
@@ -3563,8 +3643,41 @@ def file_viewer(source):
         return render_template_string(VIEWER_HTML, filename=filename, content=content, download_url=download_url)
     elif ftype == 'office':
         icon = OFFICE_ICONS.get(ext, '&#128196;')
-        # For now, just show download - OnlyOffice integration can be added later
-        return render_template_string(VIEWER_OFFICE, filename=filename, icon=icon, download_url=download_url, viewer_url=None)
+        # OnlyOffice document types
+        doc_types = {'doc': 'word', 'docx': 'word', 'odt': 'word', 'rtf': 'word', 'txt': 'word',
+                     'xls': 'cell', 'xlsx': 'cell', 'ods': 'cell', 'csv': 'cell',
+                     'ppt': 'slide', 'pptx': 'slide', 'odp': 'slide'}
+        doc_type = doc_types.get(ext, 'word')
+        # Generate token for OnlyOffice file access
+        file_token = generate_onlyoffice_token(source, path, username)
+        file_url_full = f"{ONLYOFFICE_FILE_HOST}/api/onlyoffice/file?token={file_token}"
+        # OnlyOffice config
+        config = {
+            "document": {
+                "fileType": ext,
+                "key": hashlib.md5(f"{source}:{path}:{time.time()//300}".encode()).hexdigest()[:20],
+                "title": filename,
+                "url": file_url_full,
+            },
+            "documentType": doc_type,
+            "editorConfig": {
+                "mode": "view",
+                "lang": "vi",
+                "customization": {
+                    "forcesave": False,
+                    "hideRightMenu": True,
+                    "compactHeader": True,
+                    "toolbarNoTabs": True,
+                }
+            },
+            "height": "100%",
+            "width": "100%",
+        }
+        # Sign with JWT for OnlyOffice API
+        token = jwt.encode(config, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
+        config['token'] = token
+        return render_template_string(VIEWER_OFFICE, filename=filename, icon=icon, download_url=download_url,
+                                      onlyoffice_url=ONLYOFFICE_URL, config_json=json.dumps(config))
     else:
         return render_template_string(VIEWER_UNSUPPORTED, filename=filename, download_url=download_url)
 
