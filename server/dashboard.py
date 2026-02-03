@@ -5983,13 +5983,15 @@ def api_chat_upload():
         file_id = str(uuid.uuid4())[:12]
         timestamp = datetime.utcnow().strftime('%Y%m%d')
         safe_filename = file.filename.replace('/', '_').replace('\\', '_')
-        s3_path = f"chat_files/{timestamp}/{from_user}/{file_id}_{safe_filename}"
+        rel_dir = f"chat_files/{timestamp}/{from_user}"
+        actual_filename = f"{file_id}_{safe_filename}"
+        s3_path = f"{rel_dir}/{actual_filename}"
 
         # Upload to shared S3
         file_data = file.read()
         file_size = len(file_data)
 
-        ok, result = upload_to_s3(cfg, '', s3_path, file_data)
+        ok, result = upload_to_s3(cfg, rel_dir, actual_filename, file_data)
 
         if not ok:
             return jsonify({'error': f'Upload failed: {result}'}), 500
@@ -6086,8 +6088,10 @@ def api_chat_file_download(file_id):
         if not cfg:
             return 'S3 not configured', 500
 
-        # Stream file from S3
-        gen, length, ctype = stream_s3_object(cfg, file_doc['s3_path'])
+        # Stream file from S3 (need to prepend prefix like shared space)
+        prefix = cfg.get('prefix', '').strip('/')
+        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
+        gen, length, ctype = stream_s3_object(cfg, s3_key)
 
         # Properly encode filename for Content-Disposition (RFC 5987)
         filename = file_doc['filename']
@@ -6238,7 +6242,10 @@ def api_chat_file_save():
             region_name=cfg.get('region', 'us-east-1')
         )
 
-        response = s3.get_object(Bucket=cfg['bucket_name'], Key=file_doc['s3_path'])
+        # Need to prepend prefix like shared space
+        prefix = cfg.get('prefix', '').strip('/')
+        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
+        response = s3.get_object(Bucket=cfg['bucket_name'], Key=s3_key)
         file_data = response['Body'].read()
 
         if dest == 'workspace':
