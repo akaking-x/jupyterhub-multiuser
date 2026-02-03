@@ -2346,7 +2346,27 @@ function s3Mkdir(){showPrompt('Tạo thư mục','Tên thư mục','',function(n
 function wsDelete(){var items=getChecked('ws');if(!items.length)return;showConfirm('Xóa file','Xóa '+items.length+' mục đã chọn?',function(){fetch('/api/workspace/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,path:wsPath})}).then(()=>loadWs(wsPath));});}
 function s3Delete(){var items=getChecked('s3');if(!items.length)return;showConfirm('Xóa file','Xóa '+items.length+' mục từ S3?',function(){fetch('/api/s3/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,path:s3Path})}).then(()=>loadS3(s3Path));});}
 function s3Share(){var items=getChecked('s3');if(items.length!==1){showModal('Thông báo','Chọn đúng 1 mục để chia sẻ','warning');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var icon=fi?fi.querySelector('.file-icon').innerHTML:'';var type=icon.indexOf('128193')>=0?'dir':'file';showPrompt('Mật khẩu','Để trống nếu không cần','',function(pw){if(pw===null)return;showPrompt('Thời hạn','Số giờ (0 = vĩnh viễn)','0',function(hrs){if(hrs===null)return;fetch('/api/share/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type:type,s3_path:s3Path,password:pw||'',expires_hours:parseInt(hrs)||0})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}var link=location.origin+'/share/'+d.share_id;navigator.clipboard.writeText(link).then(()=>showModal('Thành công','Link đã được copy:<br><code style="word-break:break-all;font-size:12px">'+link+'</code>','success')).catch(()=>showModal('Link chia sẻ','<code style="word-break:break-all;font-size:12px">'+link+'</code>','info'));});});});}
-function s3ShareWithUser(){var items=getChecked('s3');if(items.length!==1){showModal('Thông báo','Chọn đúng 1 mục để chia sẻ','warning');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var type=fi&&fi.dataset.type==='dir'?'dir':'file';showPrompt('Chia sẻ với người dùng','Nhập username','',function(toUser){if(!toUser)return;showPrompt('Lời nhắn','Nhập lời nhắn (tùy chọn)','',function(msg){fetch('/api/share-with-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item_name:name,item_type:type,s3_path:s3Path,to_user:toUser,message:msg||''})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}showModal('Thành công','Đã chia sẻ với '+toUser+'!','success');});});});}
+function s3ShareWithUser(){var items=getChecked('s3');if(items.length!==1){showModal('Thông báo','Chọn đúng 1 mục để chia sẻ','warning');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var type=fi&&fi.dataset.type==='dir'?'dir':'file';
+// Fetch friends list first
+fetch('/api/friends/list').then(r=>r.json()).then(data=>{
+    var friends=(data.friends||[]).filter(f=>f.status==='accepted').map(f=>f.friend);
+    var html='<div style="margin-bottom:12px"><label style="font-size:13px;color:#94a3b8">Chọn bạn bè:</label>';
+    if(friends.length){
+        html+='<select id="share-friend-select" style="width:100%;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;margin-top:6px"><option value="">-- Chọn từ danh sách --</option>';
+        friends.forEach(f=>{html+='<option value="'+f+'">'+f+'</option>';});
+        html+='</select>';
+    }else{
+        html+='<div style="color:#64748b;font-size:12px;margin-top:6px">Chưa có bạn bè</div>';
+    }
+    html+='</div><div style="margin-bottom:12px"><label style="font-size:13px;color:#94a3b8">Hoặc nhập username:</label><input type="text" id="share-user-input" placeholder="username" style="width:100%;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;margin-top:6px"></div>';
+    html+='<div><label style="font-size:13px;color:#94a3b8">Lời nhắn (tùy chọn):</label><input type="text" id="share-msg-input" placeholder="Lời nhắn..." style="width:100%;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;margin-top:6px"></div>';
+    showConfirm('Chia sẻ: '+name,html,function(){
+        var toUser=document.getElementById('share-friend-select')?.value||document.getElementById('share-user-input').value;
+        var msg=document.getElementById('share-msg-input').value;
+        if(!toUser){showModal('Lỗi','Vui lòng chọn hoặc nhập username','warning');return;}
+        fetch('/api/share-with-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item_name:name,item_type:type,s3_path:s3Path,to_user:toUser,message:msg||''})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}showModal('Thành công','Đã chia sẻ với '+toUser+'!','success');});
+    });
+});}
 function sendToLab(){var items=getChecked('s3');if(!items.length){showModal('Thông báo','Chọn file để gửi vào JupyterLab','warning');return;}fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'s3',dest:'workspace',items:items,source_path:s3Path,dest_path:''})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}pollProgress(d.task_id,function(){try{var labFrame=window.parent.document.querySelector('#win-jupyterlab iframe');if(labFrame&&labFrame.contentWindow){labFrame.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');}}catch(e){}});});}
 // S3 drag and drop within folders
 function onDragStart(e,name,type){dragData={name:name,type:type,sourcePath:s3Path};e.target.classList.add('dragging');e.dataTransfer.effectAllowed=e.ctrlKey?'copy':'move';e.dataTransfer.setData('text/plain',name);var fpath=s3Path?(s3Path+'/'+name):name;if(window.parent&&type==='file')window.parent.postMessage({type:'file-drag-start',source:'s3',path:fpath,filename:name},'*');}
@@ -4284,6 +4304,8 @@ def api_transfer():
     items = data.get('items', [])
     source_path = data.get('source_path', '')
     dest_path = data.get('dest_path', '')
+    with open('/tmp/transfer.log', 'a') as logf:
+        logf.write(f"[Transfer] user={username}, source={source}, dest={dest}, items={items}, source_path='{source_path}'\n")
     if source not in ('workspace', 's3') or dest not in ('workspace', 's3'):
         return jsonify({'error': 'Invalid source/dest'})
     if not items:
@@ -4291,6 +4313,8 @@ def api_transfer():
     try:
         db = get_db()
         cfg = get_s3_config(db, username)
+        with open('/tmp/transfer.log', 'a') as logf:
+            logf.write(f"[Transfer] S3 prefix: {cfg.get('prefix', 'none') if cfg else 'NO CONFIG'}\n")
     except Exception as e:
         return jsonify({'error': str(e)})
     if not cfg:
@@ -4518,6 +4542,8 @@ def api_shared_transfer():
     items = data.get('items', [])
     source_path = data.get('source_path', '')
     dest_path = data.get('dest_path', '')
+    with open('/tmp/transfer.log', 'a') as logf:
+        logf.write(f"[Shared Transfer] user={username}, source={source}, dest={dest}, items={items}, source_path='{source_path}'\n")
     if source not in ('workspace', 's3') or dest not in ('workspace', 's3'):
         return jsonify({'error': 'Invalid source/dest'})
     if not items:
@@ -4525,6 +4551,8 @@ def api_shared_transfer():
     try:
         db = get_db()
         cfg = get_shared_s3_config(db)
+        with open('/tmp/transfer.log', 'a') as logf:
+            logf.write(f"[Shared Transfer] S3 prefix: {cfg.get('prefix', 'none') if cfg else 'NO CONFIG'}\n")
     except Exception as e:
         return jsonify({'error': str(e)})
     if not cfg:
@@ -4606,12 +4634,17 @@ def api_share_with_user():
     to_user = data.get('to_user', '').strip()
     item_name = data.get('item_name', '')
     item_type = data.get('item_type', 'file')  # file or dir
-    s3_key = data.get('s3_key', '')
+    s3_path = data.get('s3_path', '')  # Directory path
+    s3_key = data.get('s3_key', '')    # Full key (optional)
     message = data.get('message', '')
 
     from_user = session['user']
 
-    if not to_user or not item_name or not s3_key:
+    # Construct s3_key from s3_path and item_name if not provided
+    if not s3_key and item_name:
+        s3_key = f"{s3_path}/{item_name}" if s3_path else item_name
+
+    if not to_user or not item_name:
         return jsonify({'error': 'Missing required fields'}), 400
 
     if to_user == from_user:
@@ -6703,7 +6736,15 @@ def api_chat_file_to_workspace():
             region_name=cfg.get('region', 'us-east-1')
         )
         prefix = cfg.get('prefix', '').strip('/')
-        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
+        s3_path = file_doc.get('s3_path', '')
+        # s3_path might already include prefix or be relative
+        if s3_path.startswith(prefix + '/') if prefix else False:
+            s3_key = s3_path  # Already has prefix
+        else:
+            s3_key = f"{prefix}/{s3_path}" if prefix else s3_path
+        s3_key = s3_key.lstrip('/')
+        with open('/tmp/transfer.log', 'a') as logf:
+            logf.write(f"[Chat Transfer] file_id={file_id}, s3_path={s3_path}, prefix={prefix}, s3_key={s3_key}\n")
         response = s3.get_object(Bucket=cfg['bucket_name'], Key=s3_key)
         file_data = response['Body'].read()
 
