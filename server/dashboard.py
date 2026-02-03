@@ -6294,7 +6294,18 @@ def api_chat_message_recall():
         db = get_db()
 
         # Find the message - must be from current user
+        # Try string _id first, then ObjectId for old messages
         msg = db.messages.find_one({'_id': message_id, 'from_user': username})
+
+        if not msg:
+            # Try with ObjectId for old messages
+            from bson import ObjectId
+            try:
+                msg = db.messages.find_one({'_id': ObjectId(message_id), 'from_user': username})
+                if msg:
+                    message_id = ObjectId(message_id)  # Use ObjectId for update
+            except:
+                pass
 
         if not msg:
             return jsonify({'error': 'Message not found or not yours'}), 404
