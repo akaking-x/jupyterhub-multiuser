@@ -359,6 +359,13 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .resize-se{bottom:0;right:0;width:12px;height:12px;cursor:se-resize}
 .resize-sw{bottom:0;left:0;width:12px;height:12px;cursor:sw-resize}
 .snap-preview{position:fixed;background:rgba(99,102,241,.3);border:2px solid #6366f1;border-radius:4px;z-index:9998;display:none;pointer-events:none;transition:all .15s}
+.snap-divider{position:fixed;background:transparent;z-index:9997;display:none}
+.snap-divider::after{content:'';position:absolute;background:#475569;transition:background .15s}
+.snap-divider.vertical{width:8px;cursor:ew-resize}
+.snap-divider.vertical::after{left:3px;top:0;width:2px;height:100%}
+.snap-divider.horizontal{height:8px;cursor:ns-resize}
+.snap-divider.horizontal::after{top:3px;left:0;height:2px;width:100%}
+.snap-divider:hover::after{background:#6366f1}
 </style>
 </head><body>
 <div class="desktop">
@@ -369,6 +376,8 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="desktop-icon" ondblclick="openWindow('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
 </div>
 <div class="snap-preview" id="snap-preview"></div>
+<div class="snap-divider" id="snap-divider-v"></div>
+<div class="snap-divider" id="snap-divider-h"></div>
 <div id="windows-container"></div>
 <div class="taskbar">
     <button class="start-btn" onclick="toggleStartMenu()"><span>&#128218;</span> Menu</button>
@@ -397,6 +406,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
+let splitV=50,splitH=50; // vertical and horizontal split percentages
 const maxH=()=>window.innerHeight-48;
 const maxW=()=>window.innerWidth;
 
@@ -436,47 +446,60 @@ function openFileViewer(source,path,filename){
     wins[id]={el,snap:null,restore:null};
     el.classList.add('show');focusWin(id);updateTaskbar();
 }
-function closeWin(id){const w=wins[id];if(!w)return;w.el.remove();delete wins[id];if(APPS[id]&&APPS[id].isFile)delete APPS[id];updateTaskbar();}
+function closeWin(id){const w=wins[id];if(!w)return;w.el.remove();delete wins[id];if(APPS[id]&&APPS[id].isFile)delete APPS[id];updateDividers();updateTaskbar();}
 function minimizeWin(id){const w=wins[id];if(!w)return;w.el.classList.add('minimized');updateTaskbar();}
 function toggleMax(id){const w=wins[id];if(!w)return;if(w.snap){unsnap(id);}else{w.restore={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};applySnap(id,'max');}}
 function focusWin(id){Object.values(wins).forEach(w=>w.el.classList.remove('active'));const w=wins[id];if(w){w.el.classList.add('active');w.el.style.zIndex=++zIdx;}updateTaskbar();}
 function updateTaskbar(){const c=document.getElementById('taskbar-apps');c.innerHTML='';Object.keys(wins).forEach(id=>{const w=wins[id],app=APPS[id],b=document.createElement('button');b.className='taskbar-item'+(w.el.classList.contains('active')&&!w.el.classList.contains('minimized')?' active':'');b.innerHTML='<span>'+app.icon+'</span> '+app.title;b.onclick=()=>{if(w.el.classList.contains('minimized'))openWindow(id);else if(w.el.classList.contains('active'))minimizeWin(id);else focusWin(id);};c.appendChild(b);});}
 
 // Snap system
+function getZones(){
+    const H=maxH(),W=maxW(),vw=W*splitV/100,hw=H*splitH/100;
+    return {max:{l:0,t:0,w:W,h:H},left:{l:0,t:0,w:vw,h:H},right:{l:vw,t:0,w:W-vw,h:H},top:{l:0,t:0,w:W,h:hw},bottom:{l:0,t:hw,w:W,h:H-hw},'top-left':{l:0,t:0,w:vw,h:hw},'top-right':{l:vw,t:0,w:W-vw,h:hw},'bottom-left':{l:0,t:hw,w:vw,h:H-hw},'bottom-right':{l:vw,t:hw,w:W-vw,h:H-hw}};
+}
 function applySnap(id,zone){
     const w=wins[id];if(!w)return;
     if(!w.restore)w.restore={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};
     w.snap=zone;w.el.classList.add('snapped');
-    const H=maxH(),W=maxW();
-    const zones={max:{l:0,t:0,w:W,h:H},left:{l:0,t:0,w:W/2,h:H},right:{l:W/2,t:0,w:W/2,h:H},top:{l:0,t:0,w:W,h:H/2},bottom:{l:0,t:H/2,w:W,h:H/2},'top-left':{l:0,t:0,w:W/2,h:H/2},'top-right':{l:W/2,t:0,w:W/2,h:H/2},'bottom-left':{l:0,t:H/2,w:W/2,h:H/2},'bottom-right':{l:W/2,t:H/2,w:W/2,h:H/2}};
-    const z=zones[zone];if(!z)return;
+    const z=getZones()[zone];if(!z)return;
     w.el.style.left=z.l+'px';w.el.style.top=z.t+'px';w.el.style.width=z.w+'px';w.el.style.height=z.h+'px';
+    updateDividers();
 }
-function unsnap(id){const w=wins[id];if(!w||!w.snap)return;w.el.classList.remove('snapped');if(w.restore){w.el.style.left=w.restore.l;w.el.style.top=w.restore.t;w.el.style.width=w.restore.w;w.el.style.height=w.restore.h;}w.snap=null;}
+function unsnap(id){const w=wins[id];if(!w||!w.snap)return;w.el.classList.remove('snapped');if(w.restore){w.el.style.left=w.restore.l;w.el.style.top=w.restore.t;w.el.style.width=w.restore.w;w.el.style.height=w.restore.h;}w.snap=null;updateDividers();}
 function getSnapZone(x,y){
     const W=maxW(),H=maxH(),edge=40,corner=70;
-    // Corners: only when BOTH x and y are near edges (4-way split)
     if(x<corner&&y<corner)return'top-left';
     if(x>W-corner&&y<corner)return'top-right';
     if(x<corner&&y>H-corner)return'bottom-left';
     if(x>W-corner&&y>H-corner)return'bottom-right';
-    // Edges: 2-way split
-    if(y<edge)return'max'; // Top edge = maximize
-    if(y>H-edge)return'bottom'; // Bottom edge = bottom half
-    if(x<edge)return'left'; // Left edge = left half
-    if(x>W-edge)return'right'; // Right edge = right half
+    if(y<edge)return'max';
+    if(y>H-edge)return'bottom';
+    if(x<edge)return'left';
+    if(x>W-edge)return'right';
     return null;
 }
 function showSnapPreview(zone){
     const p=document.getElementById('snap-preview');if(!zone){p.style.display='none';return;}
-    const H=maxH(),W=maxW();
-    const zones={max:{l:0,t:0,w:W,h:H},left:{l:0,t:0,w:W/2,h:H},right:{l:W/2,t:0,w:W/2,h:H},top:{l:0,t:0,w:W,h:H/2},bottom:{l:0,t:H/2,w:W,h:H/2},'top-left':{l:0,t:0,w:W/2,h:H/2},'top-right':{l:W/2,t:0,w:W/2,h:H/2},'bottom-left':{l:0,t:H/2,w:W/2,h:H/2},'bottom-right':{l:W/2,t:H/2,w:W/2,h:H/2}};
-    const z=zones[zone];if(!z){p.style.display='none';return;}
+    const z=getZones()[zone];if(!z){p.style.display='none';return;}
     p.style.cssText=`display:block;left:${z.l}px;top:${z.t}px;width:${z.w}px;height:${z.h}px;`;
 }
-function updateSnappedWindows(){
-    Object.keys(wins).forEach(id=>{const w=wins[id];if(w.snap)applySnap(id,w.snap);});
+function updateSnappedWindows(){Object.keys(wins).forEach(id=>{const w=wins[id];if(w.snap)applySnap(id,w.snap);});}
+function updateDividers(){
+    const snapped=Object.values(wins).filter(w=>w.snap&&w.snap!=='max');
+    const hasLeft=snapped.some(w=>w.snap.includes('left'));
+    const hasRight=snapped.some(w=>w.snap.includes('right'));
+    const hasTop=snapped.some(w=>w.snap==='top'||w.snap==='top-left'||w.snap==='top-right');
+    const hasBottom=snapped.some(w=>w.snap==='bottom'||w.snap==='bottom-left'||w.snap==='bottom-right');
+    const dv=document.getElementById('snap-divider-v'),dh=document.getElementById('snap-divider-h');
+    if(hasLeft&&hasRight){dv.className='snap-divider vertical';dv.style.cssText=`display:block;left:${maxW()*splitV/100-4}px;top:0;height:${maxH()}px;`;}else{dv.style.display='none';}
+    if(hasTop&&hasBottom){dh.className='snap-divider horizontal';dh.style.cssText=`display:block;top:${maxH()*splitH/100-4}px;left:0;width:${maxW()}px;`;}else{dh.style.display='none';}
 }
+// Divider drag
+let divDrag=null;
+document.getElementById('snap-divider-v').addEventListener('mousedown',e=>{e.preventDefault();divDrag={type:'v',startX:e.clientX,startSplit:splitV};document.addEventListener('mousemove',onDivDrag);document.addEventListener('mouseup',stopDivDrag);Object.values(wins).forEach(w=>{const f=w.el.querySelector('iframe');if(f)f.style.pointerEvents='none';});});
+document.getElementById('snap-divider-h').addEventListener('mousedown',e=>{e.preventDefault();divDrag={type:'h',startY:e.clientY,startSplit:splitH};document.addEventListener('mousemove',onDivDrag);document.addEventListener('mouseup',stopDivDrag);Object.values(wins).forEach(w=>{const f=w.el.querySelector('iframe');if(f)f.style.pointerEvents='none';});});
+function onDivDrag(e){if(!divDrag)return;if(divDrag.type==='v'){const dx=e.clientX-divDrag.startX;splitV=Math.max(20,Math.min(80,divDrag.startSplit+dx/maxW()*100));}else{const dy=e.clientY-divDrag.startY;splitH=Math.max(20,Math.min(80,divDrag.startSplit+dy/maxH()*100));}updateSnappedWindows();}
+function stopDivDrag(){divDrag=null;document.removeEventListener('mousemove',onDivDrag);document.removeEventListener('mouseup',stopDivDrag);Object.values(wins).forEach(w=>{const f=w.el.querySelector('iframe');if(f)f.style.pointerEvents='';});}
 
 // Window drag
 function startDrag(e,id){
@@ -1794,19 +1817,26 @@ iframe{width:100%;height:100%;border:none}
 </style>"""
 
 EMBED_LAB = EMBED_CSS + """<!DOCTYPE html><html><head><title>JupyterLab</title></head><body style="overflow:hidden">
-<iframe src="/user/{{ username }}/lab" style="width:100%;height:100vh"></iframe>
+<iframe id="labframe" src="/user/{{ username }}/lab" style="width:100%;height:100vh"></iframe>
 <script>
-// Auto-retry on 502
-setTimeout(function check() {
+// Auto-retry on 502, stop after successful load
+var retryCount = 0, maxRetry = 10, loaded = false;
+function check502() {
+    if (loaded || retryCount >= maxRetry) return;
+    retryCount++;
     try {
-        var f = document.querySelector('iframe');
+        var f = document.getElementById('labframe');
         var d = f.contentDocument || f.contentWindow.document;
+        if (d.body && d.body.innerHTML.length > 100 && !d.body.innerHTML.includes('502') && !d.body.innerHTML.includes('Bad Gateway')) {
+            loaded = true; return;
+        }
         if (d.body && (d.body.innerHTML.includes('502') || d.body.innerHTML.includes('Bad Gateway'))) {
             f.src = f.src;
         }
-    } catch(e) {}
-    setTimeout(check, 3000);
-}, 3000);
+    } catch(e) { loaded = true; } // Cross-origin means JupyterLab loaded
+    if (!loaded) setTimeout(check502, 3000);
+}
+setTimeout(check502, 3000);
 </script>
 </body></html>"""
 
