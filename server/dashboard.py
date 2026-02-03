@@ -8720,13 +8720,30 @@ def api_todos_comment(task_id):
 
 @app.route('/api/todos/users')
 def api_todos_users():
-    """Get list of users for assignment"""
+    """Get list of friends for assignment (only accepted friends)"""
     if 'user' not in session or session.get('is_admin'):
         return jsonify({'error': 'Unauthorized'}), 401
 
+    username = session['user']
+
     try:
-        users = get_usernames()
-        return jsonify({'users': users})
+        db = get_db()
+
+        # Only get accepted friends
+        friends = []
+        friends_docs = list(db.friends.find({
+            '$or': [
+                {'user': username, 'status': 'accepted'},
+                {'friend': username, 'status': 'accepted'}
+            ]
+        }))
+
+        for f in friends_docs:
+            friend_name = f['friend'] if f['user'] == username else f['user']
+            if friend_name not in friends:
+                friends.append(friend_name)
+
+        return jsonify({'users': sorted(friends)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
