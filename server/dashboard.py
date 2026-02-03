@@ -503,9 +503,23 @@ window.addEventListener('message',function(e){
 });
 function showJupyterDropZone(show){
     var jw=wins['jupyterlab'];
-    if(!jw)return;
+    if(!jw){
+        // Open JupyterLab if not open, then show dropzone
+        if(show){
+            openWindow('jupyterlab');
+            setTimeout(function(){showJupyterDropZone(true);},100);
+        }
+        return;
+    }
     var dz=jw.el.querySelector('.jupyter-dropzone');
+    var iframe=jw.el.querySelector('iframe');
     if(show&&!dz){
+        // Ensure JupyterLab window is visible and on top
+        if(jw.el.classList.contains('minimized'))jw.el.classList.remove('minimized');
+        jw.el.classList.add('show');
+        focusWin('jupyterlab');
+        // Disable iframe pointer events so dropzone can receive drag
+        if(iframe)iframe.style.pointerEvents='none';
         dz=document.createElement('div');
         dz.className='jupyter-dropzone';
         dz.innerHTML='<div class="dropzone-content"><div class="dropzone-icon">&#128229;</div><div>Drop file here to import to JupyterLab</div></div>';
@@ -523,11 +537,38 @@ function showJupyterDropZone(show){
         jw.el.querySelector('.window-body').appendChild(dz);
     }else if(!show&&dz){
         dz.remove();
+        // Re-enable iframe pointer events
+        if(iframe)iframe.style.pointerEvents='';
     }
 }
 function transferToJupyter(fileData){
-    var body={source:fileData.source,items:[{name:fileData.filename,type:'file'}],source_path:fileData.path.replace(/\\/[^\\/]+$/,''),dest:'workspace',dest_path:''};
-    fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    // Workspace files are already in JupyterLab - just refresh
+    if(fileData.source==='workspace'){
+        var jw=wins['jupyterlab'];
+        if(jw){var iframe=jw.el.querySelector('iframe');if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');}
+        showStatus('File already in workspace: '+fileData.filename);
+        return;
+    }
+    // Chat files use file_id instead of path
+    if(fileData.source==='chat'){
+        fetch('/api/chat/file-to-workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileData.file_id,filename:fileData.filename})})
+        .then(r=>r.json()).then(d=>{
+            if(d.success){
+                var jw=wins['jupyterlab'];
+                if(jw){var iframe=jw.el.querySelector('iframe');if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');}
+                showStatus('File copied to workspace: '+fileData.filename);
+            }else{
+                alert('Transfer failed: '+(d.error||'Unknown error'));
+            }
+        });
+        return;
+    }
+    var srcPath=fileData.path.replace(/[\\\/][^\\\/]+$/,'');
+    var body={source:'s3',items:[{name:fileData.filename,type:'file'}],source_path:srcPath,dest:'workspace',dest_path:''};
+    // Choose endpoint based on source
+    var endpoint='/api/transfer';
+    if(fileData.source==='shared')endpoint='/api/shared/transfer';
+    fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(r=>r.json()).then(d=>{
         if(d.task_id){
             checkTransferStatus(d.task_id);
@@ -538,7 +579,7 @@ function transferToJupyter(fileData){
 }
 function checkTransferStatus(taskId){
     fetch('/api/transfer/status/'+taskId).then(r=>r.json()).then(d=>{
-        if(d.status==='completed'){
+        if(d.status==='done'){
             // Refresh JupyterLab file browser
             var jw=wins['jupyterlab'];
             if(jw){
@@ -548,8 +589,8 @@ function checkTransferStatus(taskId){
                 }
             }
             showStatus('File transferred to JupyterLab');
-        }else if(d.status==='failed'){
-            alert('Transfer failed');
+        }else if(d.status==='error'){
+            alert('Transfer failed: '+(d.error||'Unknown error'));
         }else{
             setTimeout(function(){checkTransferStatus(taskId);},1000);
         }
@@ -2953,11 +2994,12 @@ function renderMessages(){
                 html+='<button class="btn btn-sm btn-danger" onclick="rejectFile(\\''+fi.file_id+'\\')">Từ chối</button>';
                 html+='</div>';
             }else if(status==='accepted'){
-                // Accepted - show download options
-                html+='<div class="file-actions">';
+                // Accepted - show download options (draggable to JupyterLab)
+                html+='<div class="file-actions" draggable="true" ondragstart="startChatFileDrag(event,\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename||'file')+'\\')" ondragend="endChatFileDrag()">';
                 html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download="'+escapeHtml(fi.filename||'file')+'">Tải xuống</a>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToS3(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ S3</button>';
+                html+='<span style="font-size:10px;color:#64748b;margin-left:8px">Kéo thả sang JupyterLab</span>';
                 html+='</div>';
             }else if(status==='rejected'){
                 html+='<div style="font-size:11px;color:#ef4444;margin-top:6px">Đã từ chối</div>';
@@ -3303,6 +3345,16 @@ function formatTime(iso){
 
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
 function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');}
+
+// Drag chat files to JupyterLab
+function startChatFileDrag(e,fileId,filename){
+    e.dataTransfer.setData('text/plain',filename);
+    e.dataTransfer.effectAllowed='copy';
+    if(window.parent)window.parent.postMessage({type:'file-drag-start',source:'chat',file_id:fileId,filename:filename},'*');
+}
+function endChatFileDrag(){
+    if(window.parent)window.parent.postMessage({type:'file-drag-end'},'*');
+}
 
 // Start
 init();
@@ -6537,6 +6589,61 @@ def api_chat_file_save():
                 return jsonify({'error': result}), 500
 
         return jsonify({'error': 'Invalid destination'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chat/file-to-workspace', methods=['POST'])
+def api_chat_file_to_workspace():
+    """Quick save chat file to workspace (for drag & drop)"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    file_id = data.get('file_id', '')
+    username = session['user']
+
+    try:
+        db = get_db()
+        file_doc = db.chat_files.find_one({'_id': file_id})
+
+        if not file_doc:
+            return jsonify({'error': 'File not found'}), 404
+
+        # Check permission
+        if username != file_doc['from_user'] and username != file_doc['to_user']:
+            return jsonify({'error': 'Forbidden'}), 403
+
+        # Must be accepted (for receiver) or sender
+        if file_doc.get('status') != 'accepted' and username == file_doc['to_user']:
+            return jsonify({'error': 'File not accepted yet'}), 400
+
+        # Get chat S3 config
+        cfg = get_chat_s3_config(db)
+        if not cfg:
+            return jsonify({'error': 'S3 not configured'}), 500
+
+        # Download from chat S3
+        import boto3
+        s3 = boto3.client('s3',
+            endpoint_url=cfg['endpoint_url'],
+            aws_access_key_id=cfg['access_key'],
+            aws_secret_access_key=cfg['secret_key'],
+            region_name=cfg.get('region', 'us-east-1')
+        )
+        prefix = cfg.get('prefix', '').strip('/')
+        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
+        response = s3.get_object(Bucket=cfg['bucket_name'], Key=s3_key)
+        file_data = response['Body'].read()
+
+        # Save to workspace
+        workspace_path = f"/home/{username}/workspace/{file_doc['filename']}"
+        os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
+        with open(workspace_path, 'wb') as f:
+            f.write(file_data)
+
+        return jsonify({'success': True, 'filename': file_doc['filename']})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
