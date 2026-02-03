@@ -373,7 +373,8 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .window-controls .close{background:#ef4444}
 .window-controls button:hover{transform:scale(1.15);filter:brightness(1.1)}
 .window-controls button:active{transform:scale(0.95)}
-.window-body{flex:1;overflow:auto;background:#0f172a;position:relative}
+.window-body{flex:1;overflow:auto;background:#0f172a;position:relative;scrollbar-width:none;-ms-overflow-style:none}
+.window-body::-webkit-scrollbar{display:none}
 .window-body iframe{width:100%;height:100%;border:none}
 .jupyter-dropzone{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.95);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer}
 .jupyter-dropzone .dropzone-content{text-align:center;color:#fff;padding:60px 80px;background:rgba(99,102,241,.2);border:3px dashed #6366f1;border-radius:20px;max-width:500px;transition:all .2s}
@@ -414,6 +415,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="desktop-icon" ondblclick="openWindow('chat')"><div class="icon">&#128172;</div><div class="label">Chat</div></div>
     <div class="desktop-icon" ondblclick="openWindow('browser')"><div class="icon">&#127760;</div><div class="label">Browser</div></div>
     <div class="desktop-icon" ondblclick="openWindow('balatro')"><div class="icon">&#127183;</div><div class="label">Balatro</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('gamehub')"><div class="icon">&#127918;</div><div class="label">GameHub</div></div>
     <div class="desktop-icon" ondblclick="openWindow('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
 </div>
 <div class="snap-preview" id="snap-preview"></div>
@@ -447,7 +449,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},gamehub:{title:'GameHub',icon:'&#127918;',url:'https://gamehub24.pages.dev',w:1200,h:750},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -3054,8 +3056,7 @@ function renderMessages(){
                 // Accepted - show download options
                 html+='<div class="file-actions">';
                 html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download="'+escapeHtml(fi.filename||'file')+'">Tải xuống</a>';
-                html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
-                html+='<button class="btn btn-sm btn-secondary" onclick="sendChatFileToLab(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ JupyterLab</button>';
+                html+='<button class="btn btn-sm btn-secondary" onclick="showSaveDialog(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">Lưu vào...</button>';
                 html+='</div>';
             }else if(status==='rejected'){
                 html+='<div style="font-size:11px;color:#ef4444;margin-top:6px">Đã từ chối</div>';
@@ -3335,39 +3336,165 @@ function rejectFile(fileId){
     });
 }
 
-function saveToWorkspace(fileId,filename){
-    fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'workspace'})})
-    .then(r=>r.json()).then(data=>{
-        if(data.success){
-            showModal('Thành công','Đã lưu vào Workspace: '+filename,'success');
-        }else{
-            showModal('Lỗi',data.error||'Không thể lưu file','error');
-        }
+var saveDlg={fileId:'',filename:'',dest:'workspace',path:'',items:[]};
+
+function showSaveDialog(fileId,filename){
+    saveDlg.fileId=fileId;
+    saveDlg.filename=filename;
+    saveDlg.dest='workspace';
+    saveDlg.path='';
+    saveDlg.items=[];
+    openSaveModal();
+    loadSaveDlgFolder('');
+}
+
+function openSaveModal(){
+    var ext=saveDlg.filename.split('.').pop().toLowerCase();
+    var fileIcon='📄';
+    if(['jpg','jpeg','png','gif','webp','svg'].includes(ext))fileIcon='🖼️';
+    else if(['mp4','avi','mov','mkv'].includes(ext))fileIcon='🎬';
+    else if(['mp3','wav','ogg'].includes(ext))fileIcon='🎵';
+    else if(['pdf'].includes(ext))fileIcon='📕';
+    else if(['doc','docx'].includes(ext))fileIcon='📘';
+    else if(['xls','xlsx'].includes(ext))fileIcon='📗';
+    else if(['zip','rar','7z'].includes(ext))fileIcon='📦';
+    var html='<div class="svd">';
+    html+='<div class="svd-file"><div class="svd-file-icon">'+fileIcon+'</div><div class="svd-file-detail"><div class="svd-file-name">'+escapeHtml(saveDlg.filename)+'</div><div class="svd-file-hint">Chọn vị trí lưu file</div></div></div>';
+    html+='<div class="svd-tabs"><div class="svd-tab active" data-dest="workspace" onclick="switchSaveTab(\\'workspace\\')"><span class="svd-tab-icon">💼</span><span>Workspace</span></div>';
+    html+='<div class="svd-tab" data-dest="s3" onclick="switchSaveTab(\\'s3\\')"><span class="svd-tab-icon">☁️</span><span>S3 Backup</span></div></div>';
+    html+='<div class="svd-nav" id="save-breadcrumb"></div>';
+    html+='<div class="svd-list" id="save-folder-list"></div>';
+    html+='<div class="svd-dest"><span class="svd-dest-label">Lưu vào:</span><span class="svd-dest-path" id="save-dest-display">/</span></div>';
+    html+='<div class="svd-foot"><button class="svd-btn svd-btn-new" onclick="createSaveFolder()"><span>+</span> Thư mục mới</button>';
+    html+='<div class="svd-foot-right"><button class="svd-btn svd-btn-cancel" onclick="closeModal()">Hủy</button>';
+    html+='<button class="svd-btn svd-btn-save" onclick="doSaveFile()">Lưu file</button></div></div></div>';
+    html+='<style>';
+    html+='.svd{width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px;padding:16px}';
+    html+='.svd-file{display:flex;align-items:center;gap:12px;padding:14px;background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));border-radius:10px;border:1px solid rgba(99,102,241,.2)}';
+    html+='.svd-file-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:24px;background:rgba(255,255,255,.08);border-radius:8px;flex-shrink:0}';
+    html+='.svd-file-detail{flex:1;min-width:0;overflow:hidden}';
+    html+='.svd-file-name{font-weight:600;color:#f1f5f9;font-size:13px;word-break:break-all;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}';
+    html+='.svd-file-hint{font-size:11px;color:#64748b;margin-top:2px}';
+    html+='.svd-tabs{display:flex;background:#0f172a;border-radius:8px;padding:3px;gap:3px}';
+    html+='.svd-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border-radius:6px;cursor:pointer;transition:all .2s;color:#64748b;font-size:12px;font-weight:500}';
+    html+='.svd-tab:hover{color:#94a3b8;background:rgba(255,255,255,.03)}';
+    html+='.svd-tab.active{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,.3)}';
+    html+='.svd-tab-icon{font-size:14px}';
+    html+='.svd-nav{display:flex;align-items:center;gap:4px;padding:8px 10px;background:#0f172a;border-radius:6px;font-size:12px;flex-wrap:wrap;min-height:36px}';
+    html+='.svd-nav-item{color:#94a3b8;cursor:pointer;padding:3px 6px;border-radius:4px;transition:all .15s;white-space:nowrap}';
+    html+='.svd-nav-item:hover{background:rgba(99,102,241,.2);color:#a5b4fc}';
+    html+='.svd-nav-sep{color:#334155;font-size:10px}';
+    html+='.svd-list{min-height:120px;max-height:180px;overflow-y:auto;background:#0f172a;border-radius:8px;border:1px solid #1e293b;scrollbar-width:none;-ms-overflow-style:none}';
+    html+='.svd-list::-webkit-scrollbar{display:none}';
+    html+='.svd-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;transition:all .15s;border-left:2px solid transparent}';
+    html+='.svd-item:hover{background:rgba(99,102,241,.1);border-left-color:#6366f1}';
+    html+='.svd-item-icon{font-size:18px;opacity:.9}';
+    html+='.svd-item-name{color:#e2e8f0;font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html+='.svd-item-arrow{color:#475569;font-size:11px}';
+    html+='.svd-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;color:#475569;gap:6px;padding:20px}';
+    html+='.svd-empty-icon{font-size:28px;opacity:.5}';
+    html+='.svd-empty-text{font-size:12px}';
+    html+='.svd-loading{display:flex;align-items:center;justify-content:center;min-height:120px;color:#64748b;font-size:13px}';
+    html+='.svd-dest{display:flex;align-items:center;gap:8px;padding:10px 12px;background:linear-gradient(135deg,rgba(34,197,94,.1),rgba(16,185,129,.05));border-radius:6px;border:1px solid rgba(34,197,94,.2)}';
+    html+='.svd-dest-label{color:#64748b;font-size:11px;font-weight:500;white-space:nowrap}';
+    html+='.svd-dest-path{color:#4ade80;font-size:11px;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+    html+='.svd-foot{display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid #1e293b;flex-wrap:wrap;gap:8px}';
+    html+='.svd-foot-right{display:flex;gap:8px}';
+    html+='.svd-btn{padding:8px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;border:none}';
+    html+='.svd-btn-new{background:transparent;color:#94a3b8;border:1px dashed #334155;padding:8px 12px}';
+    html+='.svd-btn-new:hover{border-color:#6366f1;color:#a5b4fc;background:rgba(99,102,241,.1)}';
+    html+='.svd-btn-cancel{background:#1e293b;color:#94a3b8}';
+    html+='.svd-btn-cancel:hover{background:#334155;color:#fff}';
+    html+='.svd-btn-save{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,.25)}';
+    html+='.svd-btn-save:hover{box-shadow:0 3px 12px rgba(99,102,241,.35)}';
+    html+='</style>';
+    showModal('',html,'custom',true);
+}
+
+function switchSaveTab(dest){
+    saveDlg.dest=dest;
+    saveDlg.path='';
+    document.querySelectorAll('.svd-tab').forEach(t=>t.classList.toggle('active',t.dataset.dest===dest));
+    loadSaveDlgFolder('');
+}
+
+function loadSaveDlgFolder(path){
+    saveDlg.path=path;
+    var endpoint=saveDlg.dest==='workspace'?'/api/workspace/list':'/api/s3/list';
+    document.getElementById('save-folder-list').innerHTML='<div class="svd-loading">Đang tải...</div>';
+    fetch(endpoint+'?path='+encodeURIComponent(path)).then(r=>r.json()).then(data=>{
+        saveDlg.items=data.items||[];
+        renderSaveBreadcrumb();
+        renderSaveFolderList();
+        updateSaveDestDisplay();
+    }).catch(()=>{
+        document.getElementById('save-folder-list').innerHTML='<div class="svd-empty"><div class="svd-empty-icon">⚠️</div><div class="svd-empty-text">Không thể tải thư mục</div></div>';
     });
 }
 
-function saveToS3(fileId,filename){
-    fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'s3'})})
-    .then(r=>r.json()).then(data=>{
-        if(data.success){
-            showModal('Thành công','Đã lưu vào S3 Backup: '+filename,'success');
-        }else{
-            showModal('Lỗi',data.error||'Không thể lưu file','error');
-        }
+function updateSaveDestDisplay(){
+    var el=document.getElementById('save-dest-display');
+    if(el){
+        var loc=saveDlg.dest==='workspace'?'Workspace':'S3 Backup';
+        el.textContent=loc+':/'+saveDlg.path+(saveDlg.path?'/':'')+saveDlg.filename;
+    }
+}
+
+function renderSaveBreadcrumb(){
+    var bc=document.getElementById('save-breadcrumb');
+    var parts=saveDlg.path?saveDlg.path.split('/'):[];
+    var rootName=saveDlg.dest==='workspace'?'Workspace':'S3 Backup';
+    var html='<span class="svd-nav-item" onclick="loadSaveDlgFolder(\\'\\')">🏠 '+rootName+'</span>';
+    var accumulated='';
+    parts.forEach((p,i)=>{
+        accumulated+=(i>0?'/':'')+p;
+        var accCopy=accumulated;
+        html+='<span class="svd-nav-sep">›</span><span class="svd-nav-item" onclick="loadSaveDlgFolder(\\''+escapeHtml(accCopy)+'\\')">'+escapeHtml(p)+'</span>';
+    });
+    bc.innerHTML=html;
+}
+
+function renderSaveFolderList(){
+    var list=document.getElementById('save-folder-list');
+    var folders=saveDlg.items.filter(i=>i.type==='dir');
+    if(!folders.length){
+        list.innerHTML='<div class="svd-empty"><div class="svd-empty-icon">📂</div><div class="svd-empty-text">Thư mục trống</div></div>';
+        return;
+    }
+    var html='';
+    folders.forEach(f=>{
+        var newPath=saveDlg.path?(saveDlg.path+'/'+f.name):f.name;
+        html+='<div class="svd-item" onclick="loadSaveDlgFolder(\\''+escapeHtml(newPath)+'\\')">';
+        html+='<span class="svd-item-icon">📁</span>';
+        html+='<span class="svd-item-name">'+escapeHtml(f.name)+'</span>';
+        html+='<span class="svd-item-arrow">›</span>';
+        html+='</div>';
+    });
+    list.innerHTML=html;
+}
+
+function createSaveFolder(){
+    var name=prompt('Tên thư mục mới:');
+    if(!name||!name.trim())return;
+    var endpoint=saveDlg.dest==='workspace'?'/api/workspace/mkdir':'/api/s3/mkdir';
+    var newPath=saveDlg.path?(saveDlg.path+'/'+name.trim()):name.trim();
+    fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:newPath})})
+    .then(r=>r.json()).then(d=>{
+        if(d.error){showModal('Lỗi',d.error,'error');return;}
+        loadSaveDlgFolder(saveDlg.path);
     });
 }
 
-function sendChatFileToLab(fileId,filename){
-    fetch('/api/chat/file-to-workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,filename:filename})})
+function doSaveFile(){
+    closeModal();
+    fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:saveDlg.fileId,dest:saveDlg.dest,dest_path:saveDlg.path})})
     .then(r=>r.json()).then(data=>{
         if(data.success){
-            showModal('Thành công','Đã chuyển vào JupyterLab: '+filename,'success');
-            // Notify parent to refresh JupyterLab
-            if(window.parent&&window.parent.refreshJupyterLab){
-                window.parent.refreshJupyterLab();
-            }
+            var loc=saveDlg.dest==='workspace'?'Workspace':'S3 Backup';
+            var path=saveDlg.path?(saveDlg.path+'/'+saveDlg.filename):saveDlg.filename;
+            showModal('Thành công','Đã lưu vào '+loc+':<br><code style="word-break:break-all">'+escapeHtml(path)+'</code>','success');
         }else{
-            showModal('Lỗi',data.error||'Không thể chuyển file','error');
+            showModal('Lỗi',data.error||'Không thể lưu file','error');
         }
     });
 }
@@ -3416,6 +3543,55 @@ function formatTime(iso){
 
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
 function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');}
+
+// ===== MODAL SYSTEM =====
+var modalOverlay=null;
+function createModalOverlay(){
+    if(!modalOverlay){
+        modalOverlay=document.createElement('div');
+        modalOverlay.className='chat-modal-overlay';
+        modalOverlay.innerHTML='<div class="chat-modal-box"></div>';
+        modalOverlay.onclick=function(e){if(e.target===modalOverlay)closeModal();};
+        document.body.appendChild(modalOverlay);
+    }
+    return modalOverlay;
+}
+function showModal(title,content,type,noWrap){
+    var o=createModalOverlay();
+    var m=o.querySelector('.chat-modal-box');
+    var icons={error:'❌',success:'✅',info:'ℹ️',warning:'⚠️',custom:''};
+    var icon=icons[type]||icons.info;
+    m.className='chat-modal-box'+(type==='custom'?' cmb-custom':'');
+    if(type==='custom'||noWrap){
+        m.innerHTML=content;
+    }else{
+        m.innerHTML='<div class="cmb-header"><span class="cmb-icon">'+icon+'</span><span class="cmb-title">'+escapeHtml(title)+'</span><button class="cmb-close" onclick="closeModal()">×</button></div><div class="cmb-body">'+content+'</div><div class="cmb-footer"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>';
+    }
+    o.classList.add('show');
+}
+function showConfirm(title,content,onYes,onNo){
+    var o=createModalOverlay();
+    var m=o.querySelector('.chat-modal-box');
+    m.innerHTML='<div class="cmb-header"><span class="cmb-icon">⚠️</span><span class="cmb-title">'+escapeHtml(title)+'</span><button class="cmb-close" onclick="closeModal()">×</button></div><div class="cmb-body">'+content+'</div><div class="cmb-footer"><button class="btn btn-secondary" onclick="closeModal();if(window._cmbNo)window._cmbNo()">Hủy</button><button class="btn btn-primary" onclick="closeModal();if(window._cmbYes)window._cmbYes()">Xác nhận</button></div>';
+    window._cmbYes=onYes;window._cmbNo=onNo;
+    o.classList.add('show');
+}
+function closeModal(){if(modalOverlay)modalOverlay.classList.remove('show');}
+(function(){var s=document.createElement('style');s.textContent=`
+.chat-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;pointer-events:none;transition:opacity .2s;padding:16px;box-sizing:border-box}
+.chat-modal-overlay.show{opacity:1;pointer-events:auto}
+.chat-modal-box{background:linear-gradient(145deg,#1e293b,#0f172a);border-radius:14px;border:1px solid rgba(99,102,241,.2);box-shadow:0 20px 50px rgba(0,0,0,.5);max-width:min(400px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:hidden;animation:cmbIn .2s ease;display:flex;flex-direction:column}
+.chat-modal-box.cmb-custom{max-width:min(450px,calc(100% - 32px));border-radius:12px}
+@keyframes cmbIn{from{transform:scale(.9) translateY(20px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.cmb-header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #334155;background:rgba(0,0,0,.2);flex-shrink:0}
+.cmb-icon{font-size:20px}
+.cmb-title{flex:1;font-size:15px;font-weight:600;color:#f1f5f9}
+.cmb-close{background:none;border:none;color:#64748b;font-size:24px;cursor:pointer;padding:0;line-height:1;transition:color .15s}
+.cmb-close:hover{color:#ef4444}
+.cmb-body{padding:20px;overflow-y:auto;flex:1;min-height:0;scrollbar-width:none;-ms-overflow-style:none}
+.cmb-body::-webkit-scrollbar{display:none}
+.cmb-footer{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid #334155;background:rgba(0,0,0,.1);flex-shrink:0}
+`;document.head.appendChild(s);})();
 
 // Start
 init();
@@ -6506,14 +6682,11 @@ def api_chat_file_download(file_id):
         if username == file_doc['to_user'] and file_doc.get('status') != 'accepted':
             return 'File not accepted yet', 403
 
-        # Get chat S3 config
-        cfg = get_chat_s3_config(db)
-        if not cfg:
-            return 'S3 not configured', 500
+        # Find file in S3 (search multiple locations)
+        cfg, s3_key = find_chat_file_in_s3(db, file_doc)
+        if not cfg or not s3_key:
+            return 'File not found in S3 storage', 404
 
-        # Stream file from S3 (need to prepend prefix)
-        prefix = cfg.get('prefix', '').strip('/')
-        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
         gen, length, ctype = stream_s3_object(cfg, s3_key)
 
         # Properly encode filename for Content-Disposition (RFC 5987)
@@ -6625,6 +6798,64 @@ def api_chat_file_reject():
         return jsonify({'error': str(e)}), 500
 
 
+def find_chat_file_in_s3(db, file_doc):
+    """Search for chat file in multiple possible S3 locations"""
+    import boto3
+
+    sys_cfg = db.s3_system_config.find_one({'_id': 'default'})
+    if not sys_cfg:
+        return None, None
+
+    s3 = boto3.client('s3',
+        endpoint_url=sys_cfg['endpoint_url'],
+        aws_access_key_id=sys_cfg['access_key'],
+        aws_secret_access_key=sys_cfg['secret_key']
+    )
+    bucket = sys_cfg['bucket_name']
+
+    s3_path = file_doc.get('s3_path', '')
+    file_id = file_doc['_id']
+    filename = file_doc.get('filename', '')
+    from_user = file_doc.get('from_user', '')
+
+    # Build list of possible keys to check
+    possible_keys = []
+
+    # 1. Standard chat location: _chat/chat_files/...
+    if s3_path:
+        possible_keys.append(f"_chat/{s3_path}")
+
+    # 2. Shared space with full path: _shared/chat_files/...
+    if s3_path:
+        possible_keys.append(f"_shared/{s3_path}")
+
+    # 3. Shared space with just filename: _shared/{file_id}_{filename}
+    possible_keys.append(f"_shared/{file_id}_{filename}")
+
+    # 4. In sender's folder: {from_user}/{filename} or {from_user}/{file_id}_{filename}
+    if from_user:
+        possible_keys.append(f"{from_user}/{file_id}_{filename}")
+        possible_keys.append(f"{from_user}/{filename}")
+
+    # Try each location
+    for key in possible_keys:
+        try:
+            s3.head_object(Bucket=bucket, Key=key)
+            # Found! Return config and key
+            cfg = {
+                'endpoint_url': sys_cfg['endpoint_url'],
+                'access_key': sys_cfg['access_key'],
+                'secret_key': sys_cfg['secret_key'],
+                'bucket_name': bucket,
+                'prefix': ''
+            }
+            return cfg, key
+        except:
+            continue
+
+    return None, None
+
+
 @app.route('/api/chat/file/save', methods=['POST'])
 def api_chat_file_save():
     """Save accepted file to workspace or S3"""
@@ -6634,6 +6865,7 @@ def api_chat_file_save():
     data = request.json
     file_id = data.get('file_id', '')
     dest = data.get('dest', 'workspace')  # 'workspace' or 's3'
+    dest_path = data.get('dest_path', '').strip('/')  # Target folder
     username = session['user']
 
     try:
@@ -6647,37 +6879,31 @@ def api_chat_file_save():
         if username != file_doc['from_user'] and username != file_doc['to_user']:
             return jsonify({'error': 'Forbidden'}), 403
 
-        # Must be accepted
+        # Must be accepted (or sender can always access)
         if file_doc.get('status') != 'accepted' and username == file_doc['to_user']:
             return jsonify({'error': 'File not accepted'}), 400
 
-        # Get chat S3 config to download from
-        cfg = get_chat_s3_config(db)
-        if not cfg:
-            return jsonify({'error': 'S3 not configured'}), 500
+        # Find file in S3 (search multiple locations)
+        cfg, s3_key = find_chat_file_in_s3(db, file_doc)
+        if not cfg or not s3_key:
+            return jsonify({'error': 'File not found in S3 storage'}), 404
 
-        # Download file from chat S3
-        import boto3
-        s3 = boto3.client('s3',
-            endpoint_url=cfg['endpoint_url'],
-            aws_access_key_id=cfg['access_key'],
-            aws_secret_access_key=cfg['secret_key'],
-            region_name=cfg.get('region', 'us-east-1')
-        )
+        # Download file
+        gen, length, ctype = stream_s3_object(cfg, s3_key)
+        file_data = b''.join(gen)
 
-        # Need to prepend prefix like shared space
-        prefix = cfg.get('prefix', '').strip('/')
-        s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
-        response = s3.get_object(Bucket=cfg['bucket_name'], Key=s3_key)
-        file_data = response['Body'].read()
+        filename = file_doc['filename']
 
         if dest == 'workspace':
             # Save to user's workspace
-            workspace_path = f"/home/{username}/workspace/{file_doc['filename']}"
+            if dest_path:
+                workspace_path = f"/home/{username}/workspace/{dest_path}/{filename}"
+            else:
+                workspace_path = f"/home/{username}/workspace/{filename}"
             os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
             with open(workspace_path, 'wb') as f:
                 f.write(file_data)
-            return jsonify({'success': True, 'path': file_doc['filename']})
+            return jsonify({'success': True, 'path': f"{dest_path}/{filename}" if dest_path else filename})
 
         elif dest == 's3':
             # Save to user's S3 backup
@@ -6685,9 +6911,9 @@ def api_chat_file_save():
             if not user_s3_cfg:
                 return jsonify({'error': 'S3 Backup not configured'}), 400
 
-            ok, result = upload_to_s3(user_s3_cfg, '', file_doc['filename'], file_data)
+            ok, result = upload_to_s3(user_s3_cfg, dest_path, filename, file_data)
             if ok:
-                return jsonify({'success': True, 'path': file_doc['filename']})
+                return jsonify({'success': True, 'path': f"{dest_path}/{filename}" if dest_path else filename})
             else:
                 return jsonify({'error': result}), 500
 
@@ -6722,31 +6948,14 @@ def api_chat_file_to_workspace():
         if file_doc.get('status') != 'accepted' and username == file_doc['to_user']:
             return jsonify({'error': 'File not accepted yet'}), 400
 
-        # Get chat S3 config
-        cfg = get_chat_s3_config(db)
-        if not cfg:
-            return jsonify({'error': 'S3 not configured'}), 500
+        # Find file in S3 (search multiple locations)
+        cfg, s3_key = find_chat_file_in_s3(db, file_doc)
+        if not cfg or not s3_key:
+            return jsonify({'error': 'File not found in S3 storage'}), 404
 
-        # Download from chat S3
-        import boto3
-        s3 = boto3.client('s3',
-            endpoint_url=cfg['endpoint_url'],
-            aws_access_key_id=cfg['access_key'],
-            aws_secret_access_key=cfg['secret_key'],
-            region_name=cfg.get('region', 'us-east-1')
-        )
-        prefix = cfg.get('prefix', '').strip('/')
-        s3_path = file_doc.get('s3_path', '')
-        # s3_path might already include prefix or be relative
-        if s3_path.startswith(prefix + '/') if prefix else False:
-            s3_key = s3_path  # Already has prefix
-        else:
-            s3_key = f"{prefix}/{s3_path}" if prefix else s3_path
-        s3_key = s3_key.lstrip('/')
-        with open('/tmp/transfer.log', 'a') as logf:
-            logf.write(f"[Chat Transfer] file_id={file_id}, s3_path={s3_path}, prefix={prefix}, s3_key={s3_key}\n")
-        response = s3.get_object(Bucket=cfg['bucket_name'], Key=s3_key)
-        file_data = response['Body'].read()
+        # Stream from S3
+        gen, length, ctype = stream_s3_object(cfg, s3_key)
+        file_data = b''.join(gen)
 
         # Save to workspace
         workspace_path = f"/home/{username}/workspace/{file_doc['filename']}"
