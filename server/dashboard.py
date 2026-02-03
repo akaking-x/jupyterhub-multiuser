@@ -402,6 +402,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     {% if has_s3 %}<div class="desktop-icon" ondblclick="openWindow('myshares')"><div class="icon">&#128279;</div><div class="label">My Shares</div></div>{% endif %}
     <div class="desktop-icon" ondblclick="openWindow('usershares')"><div class="icon">&#128229;</div><div class="label">User Shares</div></div>
     <div class="desktop-icon" ondblclick="openWindow('chat')"><div class="icon">&#128172;</div><div class="label">Chat</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('browser')"><div class="icon">&#127760;</div><div class="label">Browser</div></div>
     <div class="desktop-icon" ondblclick="openWindow('balatro')"><div class="icon">&#127183;</div><div class="label">Balatro</div></div>
     <div class="desktop-icon" ondblclick="openWindow('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
 </div>
@@ -436,7 +437,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -2344,6 +2345,114 @@ loadWs('');
 </script></body></html>"""
 
 # ===========================================
+# ===========================================
+# EMBED_BROWSER - Simple web browser
+# ===========================================
+
+EMBED_BROWSER = EMBED_CSS + """<!DOCTYPE html><html><head><title>Browser</title>
+<style>
+.browser-container{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.browser-toolbar{display:flex;gap:8px;padding:8px 12px;background:#1e293b;border-bottom:1px solid #334155;align-items:center}
+.browser-toolbar .nav-btn{background:#334155;border:none;color:#e2e8f0;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.browser-toolbar .nav-btn:hover{background:#475569}
+.browser-toolbar .nav-btn:disabled{opacity:0.5;cursor:not-allowed}
+.browser-toolbar .url-bar{flex:1;display:flex;gap:8px}
+.browser-toolbar .url-input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:13px}
+.browser-toolbar .url-input:focus{outline:none;border-color:#6366f1}
+.browser-toolbar .go-btn{background:#6366f1;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500}
+.browser-toolbar .go-btn:hover{background:#4f46e5}
+.browser-frame{flex:1;border:none;background:#fff}
+.bookmarks{display:flex;gap:6px;padding:6px 12px;background:#0f172a;border-bottom:1px solid #334155;flex-wrap:wrap}
+.bookmark{background:#334155;border:none;color:#e2e8f0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px}
+.bookmark:hover{background:#475569}
+</style>
+</head><body>
+<div class="browser-container">
+    <div class="browser-toolbar">
+        <button class="nav-btn" onclick="goBack()" title="Back">&#8592;</button>
+        <button class="nav-btn" onclick="goForward()" title="Forward">&#8594;</button>
+        <button class="nav-btn" onclick="refresh()" title="Refresh">&#8635;</button>
+        <button class="nav-btn" onclick="goHome()" title="Home">&#127968;</button>
+        <div class="url-bar">
+            <input type="text" class="url-input" id="url-input" placeholder="Enter URL or search..." onkeydown="if(event.key==='Enter')navigate()">
+            <button class="go-btn" onclick="navigate()">Go</button>
+        </div>
+    </div>
+    <div class="bookmarks">
+        <button class="bookmark" onclick="go('https://www.google.com')">Google</button>
+        <button class="bookmark" onclick="go('https://chat.openai.com')">ChatGPT</button>
+        <button class="bookmark" onclick="go('https://claude.ai')">Claude</button>
+        <button class="bookmark" onclick="go('https://github.com')">GitHub</button>
+        <button class="bookmark" onclick="go('https://stackoverflow.com')">StackOverflow</button>
+        <button class="bookmark" onclick="go('https://www.youtube.com')">YouTube</button>
+        <button class="bookmark" onclick="go('https://docs.python.org')">Python Docs</button>
+    </div>
+    <iframe id="browser-frame" class="browser-frame" src="https://www.google.com" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"></iframe>
+</div>
+<script>
+var history = ['https://www.google.com'];
+var historyIndex = 0;
+
+function go(url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url.includes('.') && !url.includes(' ')) {
+            url = 'https://' + url;
+        } else {
+            url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+        }
+    }
+    document.getElementById('browser-frame').src = url;
+    document.getElementById('url-input').value = url;
+    // Add to history
+    history = history.slice(0, historyIndex + 1);
+    history.push(url);
+    historyIndex = history.length - 1;
+}
+
+function navigate() {
+    var url = document.getElementById('url-input').value.trim();
+    if (url) go(url);
+}
+
+function goBack() {
+    if (historyIndex > 0) {
+        historyIndex--;
+        var url = history[historyIndex];
+        document.getElementById('browser-frame').src = url;
+        document.getElementById('url-input').value = url;
+    }
+}
+
+function goForward() {
+    if (historyIndex < history.length - 1) {
+        historyIndex++;
+        var url = history[historyIndex];
+        document.getElementById('browser-frame').src = url;
+        document.getElementById('url-input').value = url;
+    }
+}
+
+function refresh() {
+    document.getElementById('browser-frame').src = document.getElementById('browser-frame').src;
+}
+
+function goHome() {
+    go('https://www.google.com');
+}
+
+// Update URL bar when iframe navigates (if same-origin)
+document.getElementById('browser-frame').onload = function() {
+    try {
+        var url = this.contentWindow.location.href;
+        document.getElementById('url-input').value = url;
+    } catch(e) {
+        // Cross-origin, can't read URL
+    }
+};
+</script>
+</body></html>
+"""
+
 # EMBED_CHAT - Realtime chat (friends only, file approval, recall)
 # ===========================================
 
@@ -3657,6 +3766,12 @@ def embed_user_shares():
     if not session.get('user') or session.get('is_admin'):
         return redirect('/')
     return render_template_string(EMBED_USER_SHARES)
+
+@app.route('/embed/browser')
+def embed_browser():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    return render_template_string(EMBED_BROWSER)
 
 @app.route('/embed/chat')
 def embed_chat():
