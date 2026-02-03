@@ -2570,9 +2570,10 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 .contact-item .last-msg{font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .contact-item .meta{text-align:right;flex-shrink:0}
 .contact-item .time{font-size:10px;color:#64748b}
-.contact-item .unread{background:#ef4444;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-top:4px}
+.contact-item .unread{background:#ef4444;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;min-width:18px;text-align:center}
 .contact-item .friend-badge{font-size:10px;color:#10b981}
 .contact-item .pending-badge{font-size:10px;color:#f59e0b}
+.tab .badge{background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600}
 .contact-item .actions{display:flex;gap:4px}
 .contact-item .actions button{padding:4px 8px;font-size:11px;border-radius:4px;border:none;cursor:pointer}
 .chat-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:0}
@@ -2637,7 +2638,7 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
             </div>
             <div class="tabs">
                 <div class="tab active" data-tab="friends" onclick="switchTab('friends')">Bạn bè</div>
-                <div class="tab" data-tab="requests" onclick="switchTab('requests')">Lời mời <span id="request-count"></span></div>
+                <div class="tab" data-tab="requests" onclick="switchTab('requests')">Lời mời<span id="request-count" class="badge" style="display:none"></span></div>
             </div>
             <div class="contact-list" id="contact-list"></div>
         </div>
@@ -2835,7 +2836,13 @@ function filterContacts(){
 
 function updateRequestCount(){
     var count=Object.values(friends).filter(s=>s==='pending_received').length;
-    document.getElementById('request-count').textContent=count?'('+count+')':'';
+    var el=document.getElementById('request-count');
+    if(count>0){
+        el.textContent=count;
+        el.style.display='inline';
+    }else{
+        el.style.display='none';
+    }
 }
 
 // ===== RENDER CONTACTS =====
@@ -2906,7 +2913,10 @@ function renderContacts(){
 // ===== SELECT USER & CHAT =====
 function selectUser(u){
     selectedUser=u;
-    if(contacts[u])contacts[u].unread=0;
+    if(contacts[u]&&contacts[u].unread>0){
+        contacts[u].unread=0;
+        socket.emit('mark_messages_read',{from_user:u});
+    }
     renderContacts();
     socket.emit('get_messages',{with_user:u});
 
@@ -5885,6 +5895,12 @@ def handle_get_messages(data):
             ]
         }).sort('created_at', 1).limit(100))
 
+        # Mark messages from with_user as read
+        db.messages.update_many(
+            {'from_user': with_user, 'to_user': username, 'is_read': {'$ne': True}},
+            {'$set': {'is_read': True}}
+        )
+
         for m in messages:
             m['_id'] = str(m['_id'])
             # Convert all datetime fields to ISO format
@@ -5896,6 +5912,29 @@ def handle_get_messages(data):
 
     except Exception as e:
         app.logger.error(f"Chat get_messages error: {e}")
+
+
+@socketio.on('mark_messages_read')
+def handle_mark_messages_read(data):
+    """Mark all messages from a user as read"""
+    username = session.get('user')
+    if not username:
+        return
+
+    from_user = data.get('from_user', '').strip()
+    if not from_user:
+        return
+
+    try:
+        db = get_db()
+        # Mark all messages from this user to current user as read
+        db.messages.update_many(
+            {'from_user': from_user, 'to_user': username, 'is_read': {'$ne': True}},
+            {'$set': {'is_read': True}}
+        )
+    except Exception as e:
+        app.logger.error(f"Chat mark_messages_read error: {e}")
+
 
 # Chat API endpoints
 @app.route('/api/chat/users')
