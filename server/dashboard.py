@@ -18,7 +18,10 @@ from datetime import datetime
 
 from pymongo import MongoClient
 
-from extension_manager import list_extensions, install_extension, uninstall_extension, restart_all_jupyterlab
+from extension_manager import (
+    list_extensions, install_extension, uninstall_extension, restart_all_jupyterlab,
+    get_popular_extensions, search_pypi,
+)
 from s3_manager import (
     get_s3_config, has_s3_config, test_s3_connection,
     list_workspace, mkdir_workspace, delete_workspace,
@@ -415,7 +418,28 @@ function testConnection() {
 # Admin Extensions Template
 # ===========================================
 
-ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager</title></head><body>
+ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager</title>
+<style>
+.ext-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;padding:16px}
+.ext-card{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:16px;transition:all .2s}
+.ext-card:hover{border-color:#6366f1;transform:translateY(-2px)}
+.ext-card h4{font-size:15px;margin-bottom:4px;color:#e2e8f0}
+.ext-card .ext-pkg{font-size:12px;color:#818cf8;font-family:monospace;margin-bottom:8px}
+.ext-card p{font-size:13px;color:#94a3b8;margin-bottom:12px;line-height:1.4}
+.ext-card .ext-actions{display:flex;gap:8px;align-items:center}
+.search-box{display:flex;gap:10px;margin-bottom:0}
+.search-box input{flex:1}
+.tab-bar{display:flex;gap:0;border-bottom:2px solid #334155;margin-bottom:0}
+.tab-bar button{background:none;border:none;padding:12px 20px;color:#94a3b8;font-size:14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500}
+.tab-bar button.active{color:#818cf8;border-bottom-color:#818cf8}
+.tab-bar button:hover{color:#e2e8f0}
+.tab-content{display:none}
+.tab-content.active{display:block}
+#search-results .ext-grid{min-height:100px}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #334155;border-top-color:#818cf8;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head><body>
 <nav class="navbar"><h1>&#128218; Jupyter<span>Hub</span> Admin</h1>
 <div class="nav-right">
     <div class="nav-links">
@@ -425,28 +449,33 @@ ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager<
     </div>
     <span>admin</span><a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
 </div></nav>
-<div class="container">
+<div class="container" style="max-width:1200px">
     {% if message %}<div class="alert {{ 'alert-success' if success else 'alert-error' }}">{{ message }}</div>{% endif %}
 
+    <!-- Tabs -->
     <div class="card">
-        <div class="card-header"><h2>&#10133; Install Extension</h2></div>
-        <div class="card-body">
-            <form method="post" action="/admin/extensions/install"><div class="form-row">
-                <div class="form-group"><label>Package name (pip)</label><input type="text" name="package" class="form-control" required placeholder="jupyterlab-git"></div>
-                <div class="form-group" style="flex:0 0 180px;display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%">Install</button></div>
-            </div></form>
+        <div class="tab-bar">
+            <button class="active" onclick="showTab('installed')">&#128230; Installed ({{ extensions|length }})</button>
+            <button onclick="showTab('browse')">&#11088; Popular</button>
+            <button onclick="showTab('search')">&#128269; Search PyPI</button>
         </div>
-    </div>
 
-    <div class="card">
-        <div class="card-header">
-            <h2>&#128230; Installed Extensions ({{ extensions|length }})</h2>
-            <form method="post" action="/admin/extensions/restart" style="display:inline">
-                <button class="btn btn-warning btn-sm">Restart All Labs</button>
-            </form>
-        </div>
-        <div class="card-body" style="padding:0">
-            {% if extensions %}<table><thead><tr><th>Extension</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <!-- Tab: Installed -->
+        <div class="tab-content active" id="tab-installed">
+            <div style="padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <form method="post" action="/admin/extensions/install" style="display:flex;gap:10px">
+                        <input type="text" name="package" class="form-control" style="width:300px" required placeholder="Package name (e.g. jupyterlab-git)">
+                        <button class="btn btn-success btn-sm">Install</button>
+                    </form>
+                </div>
+                <form method="post" action="/admin/extensions/restart" style="display:inline">
+                    <button class="btn btn-warning btn-sm">Restart All Labs</button>
+                </form>
+            </div>
+            <div style="padding:0 4px 4px">
+            {% if extensions %}
+            <table><thead><tr><th>Extension</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody>
             {% for ext in extensions %}<tr>
                 <td><strong>{{ ext.name }}</strong></td>
                 <td>{{ ext.version }}</td>
@@ -457,9 +486,94 @@ ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager<
                 </form></td>
             </tr>{% endfor %}</tbody></table>
             {% else %}<div class="empty">No extensions detected</div>{% endif %}
+            </div>
+        </div>
+
+        <!-- Tab: Browse Popular -->
+        <div class="tab-content" id="tab-browse">
+            <div class="ext-grid" id="popular-grid">
+                {% for ext in popular %}
+                <div class="ext-card">
+                    <h4>{{ ext.name }}</h4>
+                    <div class="ext-pkg">{{ ext.package }}</div>
+                    <p>{{ ext.desc }}</p>
+                    <div class="ext-actions">
+                        {% if ext.installed %}
+                        <span class="tag tag-green">Installed</span>
+                        <form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm('Uninstall {{ ext.package }}?')">
+                            <input type="hidden" name="package" value="{{ ext.package }}">
+                            <button class="btn btn-danger btn-sm">Uninstall</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/admin/extensions/install" style="display:inline">
+                            <input type="hidden" name="package" value="{{ ext.package }}">
+                            <button class="btn btn-success btn-sm">Install</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Tab: Search PyPI -->
+        <div class="tab-content" id="tab-search">
+            <div style="padding:16px 20px">
+                <div class="search-box">
+                    <input type="text" id="search-input" class="form-control" placeholder="Search JupyterLab extensions on PyPI..." onkeydown="if(event.key==='Enter')doSearch()">
+                    <button class="btn btn-primary" onclick="doSearch()">Search</button>
+                </div>
+            </div>
+            <div id="search-results"></div>
         </div>
     </div>
-</div></body></html>"""
+</div>
+
+<script>
+function showTab(name) {
+    document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
+    document.querySelectorAll('.tab-bar button').forEach(function(el){ el.classList.remove('active'); });
+    document.getElementById('tab-'+name).classList.add('active');
+    // Highlight correct tab button
+    var btns = document.querySelectorAll('.tab-bar button');
+    var map = {'installed':0,'browse':1,'search':2};
+    if (map[name] !== undefined) btns[map[name]].classList.add('active');
+}
+
+function doSearch() {
+    var q = document.getElementById('search-input').value.trim();
+    if (!q) return;
+    var el = document.getElementById('search-results');
+    el.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner"></div> Searching PyPI...</div>';
+    fetch('/admin/extensions/search?q='+encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (!data.length) {
+            el.innerHTML = '<div class="empty">No results found</div>';
+            return;
+        }
+        var html = '<div class="ext-grid">';
+        data.forEach(function(ext){
+            html += '<div class="ext-card">' +
+                '<h4>'+ext.package+'</h4>' +
+                '<div class="ext-pkg">v'+ext.version+'</div>' +
+                '<p>'+(ext.desc||'No description')+'</p>' +
+                '<div class="ext-actions">';
+            if (ext.installed) {
+                html += '<span class="tag tag-green">Installed</span>' +
+                    '<form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm(\'Uninstall '+ext.package+'?\')"><input type="hidden" name="package" value="'+ext.package+'"><button class="btn btn-danger btn-sm">Uninstall</button></form>';
+            } else {
+                html += '<form method="post" action="/admin/extensions/install" style="display:inline"><input type="hidden" name="package" value="'+ext.package+'"><button class="btn btn-success btn-sm">Install</button></form>';
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+        el.innerHTML = html;
+    })
+    .catch(function(){ el.innerHTML = '<div class="empty">Search failed</div>'; });
+}
+</script>
+</body></html>"""
 
 # ===========================================
 # User S3 Config Template
@@ -828,7 +942,15 @@ def admin_extensions():
     msg = request.args.get('msg')
     s = request.args.get('s') == '1'
     exts = list_extensions()
-    return render_template_string(ADMIN_EXTENSIONS, extensions=exts, message=msg, success=s)
+    popular = get_popular_extensions()
+    return render_template_string(ADMIN_EXTENSIONS, extensions=exts, popular=popular, message=msg, success=s)
+
+@app.route('/admin/extensions/search')
+def admin_ext_search():
+    if not session.get('is_admin'): return jsonify([])
+    q = request.args.get('q', '')
+    results = search_pypi(q)
+    return jsonify(results)
 
 @app.route('/admin/extensions/install', methods=['POST'])
 def admin_ext_install():
