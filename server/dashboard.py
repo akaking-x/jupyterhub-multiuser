@@ -3605,177 +3605,313 @@ init();
 </script></body></html>"""
 
 # ===========================================
-# EMBED_TODO - Task/Notes Management
+# EMBED_TODO - Task/Notes Management (Enhanced)
 # ===========================================
 
 EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
 <style>
-.todo-container{display:flex;height:calc(100vh - 24px);gap:12px}
-.todo-sidebar{width:220px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
-.todo-sidebar .tabs{display:flex;flex-direction:column;padding:8px}
-.todo-sidebar .tab{padding:12px 14px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.todo-sidebar .tab:hover{background:#334155}
-.todo-sidebar .tab.active{background:rgba(99,102,241,.2);color:#818cf8}
-.todo-sidebar .tab .count{background:#334155;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:auto}
-.todo-sidebar .tab.active .count{background:#6366f1;color:#fff}
-.todo-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
-.todo-header{padding:14px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
-.todo-header h2{font-size:16px;margin:0}
-.todo-filters{display:flex;gap:8px;align-items:center}
-.todo-filters select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:12px}
-.todo-list{flex:1;overflow-y:auto;padding:12px}
-.todo-item{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
-.todo-item:hover{border-color:#6366f1}
-.todo-item.completed{opacity:0.6}
-.todo-item .header{display:flex;align-items:flex-start;gap:10px}
-.todo-item .checkbox{width:20px;height:20px;border:2px solid #475569;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px}
-.todo-item .checkbox:hover{border-color:#6366f1}
-.todo-item.completed .checkbox{background:#10b981;border-color:#10b981;color:#fff}
-.todo-item .title{font-size:14px;font-weight:500;flex:1}
-.todo-item .meta{display:flex;gap:8px;margin-top:8px;margin-left:30px;flex-wrap:wrap}
-.todo-item .tag{font-size:11px;padding:2px 8px;border-radius:4px}
-.todo-item .tag.priority-high{background:rgba(239,68,68,.2);color:#ef4444}
-.todo-item .tag.priority-medium{background:rgba(245,158,11,.2);color:#f59e0b}
-.todo-item .tag.priority-low{background:rgba(99,102,241,.2);color:#818cf8}
-.todo-item .due{font-size:11px;color:#94a3b8}
-.todo-item .due.overdue{color:#ef4444}
-.todo-item .assignee{font-size:11px;color:#10b981}
-.todo-empty{text-align:center;padding:40px;color:#64748b}
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+*{box-sizing:border-box}
+.todo-app{display:flex;height:100vh;overflow:hidden}
+.todo-sidebar{width:240px;background:linear-gradient(180deg,#1e293b 0%,#0f172a 100%);border-right:1px solid #334155;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:20px;border-bottom:1px solid #334155}
+.sidebar-header h1{font-size:18px;margin:0;display:flex;align-items:center;gap:10px}
+.sidebar-header h1 span{font-size:24px}
+.sidebar-tabs{padding:12px;flex:1}
+.sidebar-tab{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;cursor:pointer;margin-bottom:6px;transition:all .2s;font-size:13px;color:#94a3b8}
+.sidebar-tab:hover{background:rgba(99,102,241,.1);color:#e2e8f0}
+.sidebar-tab.active{background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.1));color:#818cf8;border:1px solid rgba(99,102,241,.3)}
+.sidebar-tab .icon{font-size:18px;width:24px;text-align:center}
+.sidebar-tab .label{flex:1}
+.sidebar-tab .count{background:#334155;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.sidebar-tab.active .count{background:#6366f1;color:#fff}
+.todo-main{flex:1;display:flex;flex-direction:column;min-width:0;background:#0f172a}
+.main-header{padding:16px 24px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;background:#1e293b}
+.main-header h2{font-size:18px;margin:0;font-weight:600}
+.header-actions{display:flex;gap:10px;align-items:center}
+.filter-select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer}
+.filter-select:focus{outline:none;border-color:#6366f1}
+.btn-new-task{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s}
+.btn-new-task:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,.4)}
+.todo-list{flex:1;overflow-y:auto;padding:20px 24px}
+.task-card{background:linear-gradient(145deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:14px;padding:18px;margin-bottom:14px;cursor:pointer;transition:all .25s;position:relative}
+.task-card:hover{border-color:#6366f1;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.task-card.completed{opacity:0.5}
+.task-card.completed .task-title{text-decoration:line-through}
+.task-top{display:flex;align-items:flex-start;gap:14px}
+.task-checkbox{width:24px;height:24px;border:2px solid #475569;border-radius:8px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s}
+.task-checkbox:hover{border-color:#6366f1;background:rgba(99,102,241,.1)}
+.task-card.completed .task-checkbox{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff}
+.task-content{flex:1;min-width:0}
+.task-title{font-size:15px;font-weight:600;margin-bottom:6px;color:#f1f5f9}
+.task-preview{font-size:12px;color:#64748b;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.task-meta{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.task-tag{font-size:11px;padding:4px 10px;border-radius:6px;font-weight:500}
+.task-tag.high{background:linear-gradient(135deg,rgba(239,68,68,.2),rgba(239,68,68,.1));color:#f87171;border:1px solid rgba(239,68,68,.3)}
+.task-tag.medium{background:linear-gradient(135deg,rgba(245,158,11,.2),rgba(245,158,11,.1));color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.task-tag.low{background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(99,102,241,.1));color:#818cf8;border:1px solid rgba(99,102,241,.3)}
+.task-tag.status{background:rgba(71,85,105,.3);color:#94a3b8;border:1px solid #475569}
+.task-due{font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:4px}
+.task-due.overdue{color:#ef4444}
+.task-assignee{font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px}
+.task-attachments{font-size:11px;color:#6366f1;display:flex;align-items:center;gap:4px}
+.todo-empty{text-align:center;padding:60px 20px;color:#64748b}
+.todo-empty .icon{font-size:64px;margin-bottom:16px;opacity:0.3}
+.todo-empty .text{font-size:15px}
+
+/* Detail Panel */
+.detail-panel{width:0;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;transition:width .3s;overflow:hidden;flex-shrink:0}
+.detail-panel.show{width:500px}
+.detail-header{padding:16px 20px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.detail-header h3{margin:0;font-size:14px;color:#94a3b8}
+.detail-actions{display:flex;gap:8px}
+.detail-actions button{background:#334155;border:none;color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:14px;transition:all .2s}
+.detail-actions button:hover{background:#475569;color:#fff}
+.detail-actions button.danger:hover{background:#ef4444;color:#fff}
+.detail-body{flex:1;overflow-y:auto;padding:20px}
+.detail-title{font-size:20px;font-weight:700;margin-bottom:16px;color:#f1f5f9}
+.detail-meta-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8;background:#0f172a;padding:8px 12px;border-radius:8px}
+.meta-item .label{color:#64748b}
+.meta-item .value{color:#e2e8f0}
+.meta-item select,.meta-item input{background:transparent;border:none;color:#e2e8f0;font-size:12px;cursor:pointer}
+.meta-item select:focus,.meta-item input:focus{outline:none}
+.detail-section{margin-bottom:20px}
+.detail-section-header{font-size:12px;color:#64748b;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.detail-section-header button{background:transparent;border:none;color:#6366f1;font-size:12px;cursor:pointer}
+.markdown-content{background:#0f172a;border-radius:10px;padding:16px;font-size:13px;line-height:1.7;color:#e2e8f0}
+.markdown-content h1,.markdown-content h2,.markdown-content h3{color:#f1f5f9;margin-top:16px;margin-bottom:8px}
+.markdown-content h1{font-size:18px;border-bottom:1px solid #334155;padding-bottom:8px}
+.markdown-content h2{font-size:16px}
+.markdown-content h3{font-size:14px}
+.markdown-content code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+.markdown-content pre{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;overflow-x:auto}
+.markdown-content pre code{background:transparent;padding:0}
+.markdown-content ul,.markdown-content ol{padding-left:20px}
+.markdown-content li{margin-bottom:4px}
+.markdown-content a{color:#6366f1}
+.markdown-content blockquote{border-left:3px solid #6366f1;margin:0;padding-left:12px;color:#94a3b8}
+.markdown-content table{width:100%;border-collapse:collapse;margin:12px 0}
+.markdown-content th,.markdown-content td{border:1px solid #334155;padding:8px;text-align:left}
+.markdown-content th{background:#334155}
+.markdown-content input[type="checkbox"]{margin-right:8px}
+.edit-desc{width:100%;min-height:200px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;color:#e2e8f0;font-size:13px;line-height:1.6;resize:vertical;font-family:monospace}
+.edit-desc:focus{outline:none;border-color:#6366f1}
+
+/* Attachments */
+.attachments-list{display:flex;flex-direction:column;gap:8px}
+.attachment-item{display:flex;align-items:center;gap:10px;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155}
+.attachment-item .icon{font-size:20px}
+.attachment-item .info{flex:1;min-width:0}
+.attachment-item .name{font-size:13px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attachment-item .source{font-size:11px;color:#64748b}
+.attachment-item .actions{display:flex;gap:4px}
+.attachment-item .actions button{background:transparent;border:none;color:#64748b;cursor:pointer;padding:4px;font-size:12px}
+.attachment-item .actions button:hover{color:#ef4444}
+.add-attachment-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:2px dashed #334155;border-radius:8px;color:#64748b;font-size:12px;cursor:pointer;transition:all .2s}
+.add-attachment-btn:hover{border-color:#6366f1;color:#6366f1;background:rgba(99,102,241,.05)}
+
+/* Comments */
+.comments-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.comment-item{background:#0f172a;border-radius:10px;padding:12px}
+.comment-header{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
+.comment-user{color:#6366f1;font-weight:600}
+.comment-time{color:#64748b}
+.comment-text{font-size:13px;line-height:1.5;color:#e2e8f0}
+.comment-input{display:flex;gap:8px}
+.comment-input input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:13px}
+.comment-input input:focus{outline:none;border-color:#6366f1}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
 .modal-overlay.show{display:flex}
-.modal{background:#1e293b;border-radius:12px;border:1px solid #334155;width:500px;max-height:90vh;display:flex;flex-direction:column}
-.modal-header{padding:16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
-.modal-header h3{margin:0;font-size:16px}
-.modal-header .close-btn{background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer}
-.modal-body{padding:16px;flex:1;overflow-y:auto}
-.modal-footer{padding:16px;border-top:1px solid #334155;display:flex;justify-content:space-between;gap:8px}
-.form-group{margin-bottom:14px}
-.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
-.form-group input,.form-group textarea,.form-group select{width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px 12px;color:#e2e8f0;font-size:13px}
-.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:#6366f1}
-.form-group textarea{min-height:80px;resize:vertical}
-.form-row{display:flex;gap:12px}
+.modal-box{background:linear-gradient(145deg,#1e293b,#0f172a);border-radius:16px;border:1px solid #334155;width:100%;max-width:600px;max-height:85vh;display:flex;flex-direction:column;animation:modalIn .2s ease}
+.modal-box.wide{max-width:700px}
+@keyframes modalIn{from{transform:scale(.95) translateY(20px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal-header{padding:20px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{margin:0;font-size:16px;font-weight:600}
+.modal-close{background:none;border:none;color:#64748b;font-size:24px;cursor:pointer;line-height:1}
+.modal-close:hover{color:#ef4444}
+.modal-body{flex:1;overflow-y:auto;padding:20px}
+.modal-footer{padding:16px 20px;border-top:1px solid #334155;display:flex;justify-content:flex-end;gap:10px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;color:#94a3b8;margin-bottom:8px;font-weight:500}
+.form-input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;color:#e2e8f0;font-size:13px;transition:border-color .2s}
+.form-input:focus{outline:none;border-color:#6366f1}
+.form-row{display:flex;gap:16px}
 .form-row .form-group{flex:1}
-.comments-section{margin-top:16px;border-top:1px solid #334155;padding-top:16px}
-.comments-section h4{font-size:13px;margin-bottom:10px;color:#94a3b8}
-.comment{background:#0f172a;border-radius:8px;padding:10px;margin-bottom:8px}
-.comment .header{display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:4px}
-.comment .text{font-size:13px}
-.add-comment{display:flex;gap:8px}
-.add-comment input{flex:1}
-.notification{position:fixed;bottom:20px;right:20px;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.4);z-index:2000;display:none;max-width:300px}
-.notification.show{display:block;animation:slideIn .3s ease}
-@keyframes slideIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.notification .icon{font-size:20px;margin-bottom:8px}
-.notification .title{font-weight:600;font-size:14px;margin-bottom:4px}
-.notification .body{font-size:12px;color:#94a3b8}
+
+/* File Browser Modal */
+.file-browser{display:flex;flex-direction:column;gap:12px}
+.file-source-tabs{display:flex;gap:8px;margin-bottom:8px}
+.file-source-tab{flex:1;padding:12px;text-align:center;background:#0f172a;border:1px solid #334155;border-radius:10px;cursor:pointer;font-size:13px;color:#94a3b8;transition:all .2s}
+.file-source-tab:hover{border-color:#6366f1}
+.file-source-tab.active{background:rgba(99,102,241,.1);border-color:#6366f1;color:#6366f1}
+.file-list{max-height:300px;overflow-y:auto;background:#0f172a;border-radius:10px;border:1px solid #334155}
+.file-item{display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer;border-bottom:1px solid #334155}
+.file-item:last-child{border-bottom:none}
+.file-item:hover{background:#334155}
+.file-item.selected{background:rgba(99,102,241,.2)}
+.file-item .icon{font-size:20px}
+.file-item .name{flex:1;font-size:13px}
+.file-item .path{font-size:11px;color:#64748b;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-path-input{display:flex;gap:8px;margin-bottom:8px}
+.file-path-input input{flex:1}
+.upload-zone{border:2px dashed #334155;border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover{border-color:#6366f1;background:rgba(99,102,241,.05)}
+.upload-zone .icon{font-size:36px;margin-bottom:8px;opacity:0.5}
+.upload-zone .text{font-size:13px;color:#94a3b8}
+
+/* Toast */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:10px}
+.toast{background:linear-gradient(145deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:12px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5);display:flex;align-items:center;gap:12px;animation:toastIn .3s ease;max-width:350px}
+.toast.success{border-color:#10b981}
+.toast.error{border-color:#ef4444}
+.toast.info{border-color:#6366f1}
+.toast .icon{font-size:20px}
+.toast .message{flex:1;font-size:13px}
+.toast .close{background:none;border:none;color:#64748b;cursor:pointer;font-size:16px}
+@keyframes toastIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 </style>
 </head><body>
-<div class="container" style="padding:12px;height:100vh;overflow:hidden;box-sizing:border-box">
-    <div class="todo-container">
-        <div class="todo-sidebar">
-            <div class="tabs">
-                <div class="tab active" data-tab="my" onclick="switchTab('my')"><span>&#128203;</span> My Tasks <span class="count" id="count-my">0</span></div>
-                <div class="tab" data-tab="assigned" onclick="switchTab('assigned')"><span>&#128229;</span> Assigned to Me <span class="count" id="count-assigned">0</span></div>
-                <div class="tab" data-tab="created" onclick="switchTab('created')"><span>&#128228;</span> Created by Me <span class="count" id="count-created">0</span></div>
+<div class="todo-app">
+    <div class="todo-sidebar">
+        <div class="sidebar-header">
+            <h1><span>&#128203;</span> Todo</h1>
+        </div>
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" data-tab="my" onclick="switchTab('my')">
+                <span class="icon">&#128196;</span>
+                <span class="label">My Tasks</span>
+                <span class="count" id="count-my">0</span>
+            </div>
+            <div class="sidebar-tab" data-tab="assigned" onclick="switchTab('assigned')">
+                <span class="icon">&#128229;</span>
+                <span class="label">Assigned to Me</span>
+                <span class="count" id="count-assigned">0</span>
+            </div>
+            <div class="sidebar-tab" data-tab="created" onclick="switchTab('created')">
+                <span class="icon">&#128228;</span>
+                <span class="label">Created by Me</span>
+                <span class="count" id="count-created">0</span>
             </div>
         </div>
-        <div class="todo-main">
-            <div class="todo-header">
-                <h2 id="current-tab-title">My Tasks</h2>
-                <div class="todo-filters">
-                    <select id="filter-status" onchange="loadTasks()">
-                        <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                    <select id="filter-priority" onchange="loadTasks()">
-                        <option value="">All Priority</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                    <button class="btn btn-success btn-sm" onclick="showNewTask()">+ New Task</button>
-                </div>
+    </div>
+
+    <div class="todo-main">
+        <div class="main-header">
+            <h2 id="header-title">My Tasks</h2>
+            <div class="header-actions">
+                <select class="filter-select" id="filter-status" onchange="loadTasks()">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                </select>
+                <select class="filter-select" id="filter-priority" onchange="loadTasks()">
+                    <option value="">All Priority</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <button class="btn-new-task" onclick="showNewTask()"><span>+</span> New Task</button>
             </div>
-            <div class="todo-list" id="todo-list"></div>
         </div>
+        <div class="todo-list" id="todo-list"></div>
+    </div>
+
+    <div class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+            <h3>Task Details</h3>
+            <div class="detail-actions">
+                <button onclick="downloadTask()" title="Download as MD">&#128190;</button>
+                <button class="danger" id="btn-delete-task" onclick="deleteTask()" title="Delete">&#128465;</button>
+                <button onclick="closeDetail()" title="Close">&times;</button>
+            </div>
+        </div>
+        <div class="detail-body" id="detail-body"></div>
     </div>
 </div>
 
-<div class="modal-overlay" id="task-modal">
-    <div class="modal">
+<!-- New Task Modal -->
+<div class="modal-overlay" id="new-task-modal">
+    <div class="modal-box">
         <div class="modal-header">
-            <h3 id="modal-title">New Task</h3>
-            <button class="close-btn" onclick="hideModal()">&times;</button>
+            <h3>&#10024; Create New Task</h3>
+            <button class="modal-close" onclick="hideNewTaskModal()">&times;</button>
         </div>
         <div class="modal-body">
-            <input type="hidden" id="task-id">
             <div class="form-group">
                 <label>Title *</label>
-                <input type="text" id="task-title" placeholder="Task title...">
+                <input type="text" class="form-input" id="new-title" placeholder="Enter task title...">
             </div>
             <div class="form-group">
-                <label>Description</label>
-                <textarea id="task-desc" placeholder="Task description..."></textarea>
+                <label>Description (Markdown supported)</label>
+                <textarea class="form-input edit-desc" id="new-desc" placeholder="## Task Details\n\n- Item 1\n- Item 2\n\n**Important:** Write your notes here..."></textarea>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Assignee</label>
-                    <select id="task-assignee">
+                    <label>Assign To</label>
+                    <select class="form-input" id="new-assignee">
                         <option value="">Self (My Task)</option>
                         <option value="__all__">Everyone</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Priority</label>
-                    <select id="task-priority">
+                    <select class="form-input" id="new-priority">
                         <option value="medium">Medium</option>
                         <option value="high">High</option>
                         <option value="low">Low</option>
                     </select>
                 </div>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Status</label>
-                    <select id="task-status">
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Due Date</label>
-                    <input type="date" id="task-due">
-                </div>
-            </div>
-            <div class="comments-section" id="comments-section" style="display:none">
-                <h4>Comments</h4>
-                <div id="comments-list"></div>
-                <div class="add-comment">
-                    <input type="text" id="new-comment" placeholder="Add a comment...">
-                    <button class="btn btn-primary btn-sm" onclick="addComment()">Send</button>
-                </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" class="form-input" id="new-due">
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-danger btn-sm" id="delete-task-btn" style="display:none" onclick="deleteTask()">Delete</button>
-            <div style="display:flex;gap:8px">
-                <button class="btn btn-secondary" onclick="hideModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveTask()">Save</button>
-            </div>
+            <button class="btn btn-secondary" onclick="hideNewTaskModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createTask()">Create Task</button>
         </div>
     </div>
 </div>
 
-<div class="notification" id="notification">
-    <div class="icon" id="notif-icon">&#128203;</div>
-    <div class="title" id="notif-title"></div>
-    <div class="body" id="notif-body"></div>
+<!-- Attach File Modal -->
+<div class="modal-overlay" id="attach-modal">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <h3>&#128206; Attach Reference</h3>
+            <button class="modal-close" onclick="hideAttachModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="file-browser">
+                <div class="file-source-tabs">
+                    <div class="file-source-tab active" data-source="workspace" onclick="switchFileSource('workspace')">&#128193; Workspace</div>
+                    <div class="file-source-tab" data-source="s3" onclick="switchFileSource('s3')">&#9729; S3 Backup</div>
+                    <div class="file-source-tab" data-source="upload" onclick="switchFileSource('upload')">&#128228; Upload</div>
+                </div>
+                <div id="file-source-content">
+                    <div class="file-path-input">
+                        <input type="text" class="form-input" id="browse-path" placeholder="/" value="/">
+                        <button class="btn btn-secondary" onclick="browsePath()">Go</button>
+                    </div>
+                    <div class="file-list" id="file-list"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideAttachModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="attachSelected()">Attach Selected</button>
+        </div>
+    </div>
 </div>
+
+<div class="toast-container" id="toast-container"></div>
 
 <script>
 var socket=io();
@@ -3783,6 +3919,12 @@ var currentUser='{{ username }}';
 var currentTab='my';
 var tasks=[];
 var users=[];
+var currentTask=null;
+var fileSource='workspace';
+var selectedFiles=[];
+var editingDesc=false;
+
+marked.setOptions({breaks:true,gfm:true,headerIds:false,mangle:false});
 
 function init(){
     loadUsers();
@@ -3790,14 +3932,22 @@ function init(){
     setupSocket();
 }
 
+function showToast(msg,type){
+    var c=document.getElementById('toast-container');
+    var t=document.createElement('div');
+    t.className='toast '+type;
+    var icons={success:'&#10004;',error:'&#10006;',info:'&#8505;'};
+    t.innerHTML='<span class="icon">'+icons[type]+'</span><span class="message">'+msg+'</span><button class="close" onclick="this.parentElement.remove()">&times;</button>';
+    c.appendChild(t);
+    setTimeout(()=>t.remove(),4000);
+}
+
 function loadUsers(){
     fetch('/api/todos/users').then(r=>r.json()).then(d=>{
         users=d.users||[];
-        var sel=document.getElementById('task-assignee');
-        sel.innerHTML='<option value="">Self (My Task)</option><option value="__all__">Everyone</option>';
-        users.forEach(u=>{
-            if(u!==currentUser)sel.innerHTML+='<option value="'+u+'">'+u+'</option>';
-        });
+        var opts='<option value="">Self (My Task)</option><option value="__all__">Everyone</option>';
+        users.forEach(u=>{if(u!==currentUser)opts+='<option value="'+u+'">'+u+'</option>';});
+        document.getElementById('new-assignee').innerHTML=opts;
     });
 }
 
@@ -3814,130 +3964,200 @@ function loadTasks(){
     });
 }
 
-function updateCounts(counts){
-    document.getElementById('count-my').textContent=counts.my||0;
-    document.getElementById('count-assigned').textContent=counts.assigned||0;
-    document.getElementById('count-created').textContent=counts.created||0;
+function updateCounts(c){
+    document.getElementById('count-my').textContent=c.my||0;
+    document.getElementById('count-assigned').textContent=c.assigned||0;
+    document.getElementById('count-created').textContent=c.created||0;
 }
 
 function switchTab(tab){
     currentTab=tab;
-    document.querySelectorAll('.todo-sidebar .tab').forEach(t=>t.classList.remove('active'));
-    document.querySelector('.tab[data-tab="'+tab+'"]').classList.add('active');
-    var titles={'my':'My Tasks','assigned':'Assigned to Me','created':'Created by Me'};
-    document.getElementById('current-tab-title').textContent=titles[tab];
+    document.querySelectorAll('.sidebar-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.sidebar-tab[data-tab="'+tab+'"]').classList.add('active');
+    var titles={my:'My Tasks',assigned:'Assigned to Me',created:'Created by Me'};
+    document.getElementById('header-title').textContent=titles[tab];
     loadTasks();
 }
 
 function renderTasks(){
     var list=document.getElementById('todo-list');
     if(!tasks.length){
-        list.innerHTML='<div class="todo-empty"><div style="font-size:40px;margin-bottom:10px">&#128203;</div>No tasks found</div>';
+        list.innerHTML='<div class="todo-empty"><div class="icon">&#128203;</div><div class="text">No tasks found</div></div>';
         return;
     }
     var html='';
     tasks.forEach(t=>{
-        var isCompleted=t.status==='completed';
-        var priorityClass='priority-'+t.priority;
+        var done=t.status==='completed';
         var dueClass='';
-        if(t.due_date&&!isCompleted){
+        if(t.due_date&&!done){
             var due=new Date(t.due_date);
             var today=new Date();today.setHours(0,0,0,0);
             if(due<today)dueClass='overdue';
         }
-        html+='<div class="todo-item'+(isCompleted?' completed':'')+'" onclick="showTask(\\''+t._id+'\\')">';
-        html+='<div class="header">';
-        html+='<div class="checkbox" onclick="event.stopPropagation();toggleStatus(\\''+t._id+'\\',\\''+t.status+'\\')">'+(isCompleted?'&#10003;':'')+'</div>';
-        html+='<div class="title">'+escapeHtml(t.title)+'</div>';
-        html+='</div>';
-        html+='<div class="meta">';
-        html+='<span class="tag '+priorityClass+'">'+t.priority+'</span>';
-        if(t.due_date)html+='<span class="due '+dueClass+'">Due: '+formatDate(t.due_date)+'</span>';
-        if(t.assignee&&t.assignee!==currentUser)html+='<span class="assignee">To: '+t.assignee+'</span>';
-        if(t.creator&&t.creator!==currentUser)html+='<span class="assignee">From: '+t.creator+'</span>';
+        html+='<div class="task-card'+(done?' completed':'')+'" onclick="showTask(\\''+t._id+'\\')">';
+        html+='<div class="task-top">';
+        html+='<div class="task-checkbox" onclick="event.stopPropagation();toggleStatus(\\''+t._id+'\\',\\''+t.status+'\\')">'+(done?'&#10003;':'')+'</div>';
+        html+='<div class="task-content">';
+        html+='<div class="task-title">'+escapeHtml(t.title)+'</div>';
+        if(t.description)html+='<div class="task-preview">'+escapeHtml(t.description.substring(0,150))+'</div>';
+        html+='</div></div>';
+        html+='<div class="task-meta">';
+        html+='<span class="task-tag '+t.priority+'">'+t.priority.charAt(0).toUpperCase()+t.priority.slice(1)+'</span>';
+        html+='<span class="task-tag status">'+t.status.replace('_',' ')+'</span>';
+        if(t.due_date)html+='<span class="task-due '+dueClass+'">&#128197; '+formatDate(t.due_date)+'</span>';
+        if(t.assignee&&t.assignee!==currentUser)html+='<span class="task-assignee">&#128100; '+t.assignee+'</span>';
+        if(t.creator&&t.creator!==currentUser)html+='<span class="task-assignee">&#128228; '+t.creator+'</span>';
+        if(t.attachments&&t.attachments.length)html+='<span class="task-attachments">&#128206; '+t.attachments.length+'</span>';
         html+='</div></div>';
     });
     list.innerHTML=html;
 }
 
 function showNewTask(){
-    document.getElementById('modal-title').textContent='New Task';
-    document.getElementById('task-id').value='';
-    document.getElementById('task-title').value='';
-    document.getElementById('task-desc').value='';
-    document.getElementById('task-assignee').value='';
-    document.getElementById('task-priority').value='medium';
-    document.getElementById('task-status').value='pending';
-    document.getElementById('task-due').value='';
-    document.getElementById('comments-section').style.display='none';
-    document.getElementById('delete-task-btn').style.display='none';
-    document.getElementById('task-modal').classList.add('show');
+    document.getElementById('new-title').value='';
+    document.getElementById('new-desc').value='';
+    document.getElementById('new-assignee').value='';
+    document.getElementById('new-priority').value='medium';
+    document.getElementById('new-due').value='';
+    document.getElementById('new-task-modal').classList.add('show');
+}
+function hideNewTaskModal(){document.getElementById('new-task-modal').classList.remove('show');}
+
+function createTask(){
+    var data={
+        title:document.getElementById('new-title').value.trim(),
+        description:document.getElementById('new-desc').value.trim(),
+        assignee:document.getElementById('new-assignee').value,
+        priority:document.getElementById('new-priority').value,
+        due_date:document.getElementById('new-due').value||null
+    };
+    if(!data.title){showToast('Title is required','error');return;}
+    fetch('/api/todos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+    .then(r=>r.json()).then(d=>{
+        if(d.error){showToast(d.error,'error');return;}
+        showToast('Task created','success');
+        hideNewTaskModal();
+        loadTasks();
+    });
 }
 
 function showTask(id){
     var t=tasks.find(x=>x._id===id);
-    if(!t)return;
-    document.getElementById('modal-title').textContent='Edit Task';
-    document.getElementById('task-id').value=t._id;
-    document.getElementById('task-title').value=t.title;
-    document.getElementById('task-desc').value=t.description||'';
-    document.getElementById('task-assignee').value=t.assignee||'';
-    document.getElementById('task-priority').value=t.priority;
-    document.getElementById('task-status').value=t.status;
-    document.getElementById('task-due').value=t.due_date?t.due_date.split('T')[0]:'';
-    document.getElementById('delete-task-btn').style.display=t.creator===currentUser?'block':'none';
-    // Comments
+    if(!t){fetch('/api/todos/'+id).then(r=>r.json()).then(d=>{if(d.task){t=d.task;renderDetail(t);}});return;}
+    renderDetail(t);
+}
+
+function renderDetail(t){
+    currentTask=t;
     var canEdit=t.creator===currentUser||t.assignee===currentUser||t.assignee==='__all__';
-    if(canEdit){
-        document.getElementById('comments-section').style.display='block';
-        renderComments(t.comments||[]);
+    document.getElementById('btn-delete-task').style.display=t.creator===currentUser?'block':'none';
+
+    var html='<div class="detail-title" contenteditable="'+(canEdit?'true':'false')+'" onblur="updateTitle(this)">'+escapeHtml(t.title)+'</div>';
+
+    html+='<div class="detail-meta-row">';
+    html+='<div class="meta-item"><span class="label">Status:</span><select onchange="updateField(\\'status\\',this.value)"'+(canEdit?'':' disabled')+'>';
+    ['pending','in_progress','completed'].forEach(s=>{
+        html+='<option value="'+s+'"'+(t.status===s?' selected':'')+'>'+s.replace('_',' ')+'</option>';
+    });
+    html+='</select></div>';
+    html+='<div class="meta-item"><span class="label">Priority:</span><select onchange="updateField(\\'priority\\',this.value)"'+(canEdit?'':' disabled')+'>';
+    ['high','medium','low'].forEach(p=>{
+        html+='<option value="'+p+'"'+(t.priority===p?' selected':'')+'>'+p+'</option>';
+    });
+    html+='</select></div>';
+    html+='<div class="meta-item"><span class="label">Due:</span><input type="date" value="'+(t.due_date?t.due_date.split('T')[0]:'')+'" onchange="updateField(\\'due_date\\',this.value)"'+(canEdit?'':' disabled')+'></div>';
+    html+='</div>';
+
+    if(t.assignee)html+='<div class="meta-item" style="margin-bottom:16px"><span class="label">Assigned to:</span><span class="value">'+t.assignee+'</span></div>';
+    if(t.creator&&t.creator!==currentUser)html+='<div class="meta-item" style="margin-bottom:16px"><span class="label">Created by:</span><span class="value">'+t.creator+'</span></div>';
+
+    html+='<div class="detail-section">';
+    html+='<div class="detail-section-header"><span>&#128221; Description</span>';
+    if(canEdit)html+='<button onclick="toggleEditDesc()">'+(!editingDesc?'Edit':'Preview')+'</button>';
+    html+='</div>';
+    if(editingDesc&&canEdit){
+        html+='<textarea class="edit-desc" id="desc-editor" onblur="saveDesc()">'+escapeHtml(t.description||'')+'</textarea>';
     }else{
-        document.getElementById('comments-section').style.display='none';
+        html+='<div class="markdown-content">'+(t.description?marked.parse(t.description):'<em style="color:#64748b">No description</em>')+'</div>';
     }
-    document.getElementById('task-modal').classList.add('show');
-}
+    html+='</div>';
 
-function renderComments(comments){
-    var html='';
-    comments.forEach(c=>{
-        html+='<div class="comment"><div class="header"><span>'+c.user+'</span><span>'+formatDateTime(c.created_at)+'</span></div><div class="text">'+escapeHtml(c.text)+'</div></div>';
+    html+='<div class="detail-section">';
+    html+='<div class="detail-section-header"><span>&#128206; Attachments</span></div>';
+    html+='<div class="attachments-list">';
+    if(t.attachments&&t.attachments.length){
+        t.attachments.forEach((a,i)=>{
+            var icon=a.source==='s3'?'&#9729;':a.source==='upload'?'&#128196;':'&#128193;';
+            html+='<div class="attachment-item">';
+            html+='<span class="icon">'+icon+'</span>';
+            html+='<div class="info"><div class="name">'+escapeHtml(a.name)+'</div><div class="source">'+a.source+': '+escapeHtml(a.path||'')+'</div></div>';
+            html+='<div class="actions">';
+            if(a.source!=='upload')html+='<button onclick="openAttachment('+i+')" title="Open">&#128269;</button>';
+            if(canEdit)html+='<button onclick="removeAttachment('+i+')" title="Remove">&#10005;</button>';
+            html+='</div></div>';
+        });
+    }else{
+        html+='<div style="color:#64748b;font-size:12px;padding:12px">No attachments</div>';
+    }
+    if(canEdit)html+='<div class="add-attachment-btn" onclick="showAttachModal()">&#43; Add Reference</div>';
+    html+='</div></div>';
+
+    html+='<div class="detail-section">';
+    html+='<div class="detail-section-header"><span>&#128172; Comments ('+((t.comments||[]).length)+')</span></div>';
+    html+='<div class="comments-list">';
+    (t.comments||[]).forEach(c=>{
+        html+='<div class="comment-item"><div class="comment-header"><span class="comment-user">'+c.user+'</span><span class="comment-time">'+formatDateTime(c.created_at)+'</span></div><div class="comment-text">'+escapeHtml(c.text)+'</div></div>';
     });
-    document.getElementById('comments-list').innerHTML=html||'<div style="color:#64748b;font-size:12px">No comments yet</div>';
+    if(!(t.comments||[]).length)html+='<div style="color:#64748b;font-size:12px">No comments yet</div>';
+    html+='</div>';
+    if(canEdit){
+        html+='<div class="comment-input"><input type="text" id="new-comment" placeholder="Write a comment..." onkeydown="if(event.key===\\'Enter\\')addComment()"><button class="btn btn-primary btn-sm" onclick="addComment()">Send</button></div>';
+    }
+    html+='</div>';
+
+    document.getElementById('detail-body').innerHTML=html;
+    document.getElementById('detail-panel').classList.add('show');
 }
 
-function hideModal(){
-    document.getElementById('task-modal').classList.remove('show');
+function closeDetail(){
+    document.getElementById('detail-panel').classList.remove('show');
+    currentTask=null;
+    editingDesc=false;
 }
 
-function saveTask(){
-    var id=document.getElementById('task-id').value;
-    var data={
-        title:document.getElementById('task-title').value.trim(),
-        description:document.getElementById('task-desc').value.trim(),
-        assignee:document.getElementById('task-assignee').value,
-        priority:document.getElementById('task-priority').value,
-        status:document.getElementById('task-status').value,
-        due_date:document.getElementById('task-due').value||null
-    };
-    if(!data.title){showNotification('&#9888;','Error','Title is required');return;}
-    var url=id?'/api/todos/'+id:'/api/todos';
-    var method=id?'PUT':'POST';
-    fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+function toggleEditDesc(){
+    editingDesc=!editingDesc;
+    if(currentTask)renderDetail(currentTask);
+}
+
+function saveDesc(){
+    var el=document.getElementById('desc-editor');
+    if(!el||!currentTask)return;
+    var desc=el.value;
+    fetch('/api/todos/'+currentTask._id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({description:desc})})
     .then(r=>r.json()).then(d=>{
-        if(d.error){showNotification('&#9888;','Error',d.error);return;}
-        showNotification('&#10004;','Success',id?'Task updated':'Task created');
-        hideModal();
-        loadTasks();
+        if(!d.error){
+            currentTask.description=desc;
+            editingDesc=false;
+            renderDetail(currentTask);
+            loadTasks();
+        }
     });
 }
 
-function deleteTask(){
-    var id=document.getElementById('task-id').value;
-    if(!id||!confirm('Delete this task?'))return;
-    fetch('/api/todos/'+id,{method:'DELETE'}).then(r=>r.json()).then(d=>{
-        hideModal();
-        loadTasks();
-    });
+function updateTitle(el){
+    if(!currentTask)return;
+    var title=el.textContent.trim();
+    if(!title||title===currentTask.title)return;
+    fetch('/api/todos/'+currentTask._id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title})})
+    .then(r=>r.json()).then(d=>{if(!d.error){currentTask.title=title;loadTasks();}});
+}
+
+function updateField(field,value){
+    if(!currentTask)return;
+    var data={};data[field]=value||null;
+    fetch('/api/todos/'+currentTask._id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+    .then(r=>r.json()).then(d=>{if(!d.error){currentTask[field]=value;loadTasks();}});
 }
 
 function toggleStatus(id,current){
@@ -3946,49 +4166,200 @@ function toggleStatus(id,current){
     .then(r=>r.json()).then(d=>loadTasks());
 }
 
+function deleteTask(){
+    if(!currentTask||!confirm('Delete this task?'))return;
+    fetch('/api/todos/'+currentTask._id,{method:'DELETE'}).then(r=>r.json()).then(d=>{
+        closeDetail();
+        loadTasks();
+        showToast('Task deleted','success');
+    });
+}
+
 function addComment(){
-    var id=document.getElementById('task-id').value;
-    var text=document.getElementById('new-comment').value.trim();
-    if(!id||!text)return;
-    fetch('/api/todos/'+id+'/comment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})
+    var input=document.getElementById('new-comment');
+    var text=input.value.trim();
+    if(!currentTask||!text)return;
+    fetch('/api/todos/'+currentTask._id+'/comment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})
     .then(r=>r.json()).then(d=>{
-        document.getElementById('new-comment').value='';
-        // Reload task to get updated comments
-        fetch('/api/todos/'+id).then(r=>r.json()).then(t=>{
-            if(t.task)renderComments(t.task.comments||[]);
+        input.value='';
+        fetch('/api/todos/'+currentTask._id).then(r=>r.json()).then(t=>{
+            if(t.task){currentTask=t.task;renderDetail(currentTask);}
         });
     });
 }
 
+function downloadTask(){
+    if(!currentTask)return;
+    var md='# '+currentTask.title+'\\n\\n';
+    md+='**Status:** '+currentTask.status+'\\n';
+    md+='**Priority:** '+currentTask.priority+'\\n';
+    if(currentTask.due_date)md+='**Due:** '+currentTask.due_date.split('T')[0]+'\\n';
+    if(currentTask.assignee)md+='**Assignee:** '+currentTask.assignee+'\\n';
+    md+='**Created by:** '+currentTask.creator+'\\n\\n';
+    md+='---\\n\\n';
+    md+='## Description\\n\\n'+(currentTask.description||'_No description_')+'\\n\\n';
+    if(currentTask.attachments&&currentTask.attachments.length){
+        md+='## Attachments\\n\\n';
+        currentTask.attachments.forEach(a=>{md+='- '+a.name+' ('+a.source+': '+a.path+')\\n';});
+        md+='\\n';
+    }
+    if(currentTask.comments&&currentTask.comments.length){
+        md+='## Comments\\n\\n';
+        currentTask.comments.forEach(c=>{md+='**'+c.user+'** ('+c.created_at+'):\\n'+c.text+'\\n\\n';});
+    }
+    var blob=new Blob([md],{type:'text/markdown'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=currentTask.title.replace(/[^a-z0-9]/gi,'_')+'.md';
+    a.click();
+}
+
+// Attach files
+function showAttachModal(){
+    selectedFiles=[];
+    fileSource='workspace';
+    document.querySelectorAll('.file-source-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.file-source-tab[data-source="workspace"]').classList.add('active');
+    document.getElementById('browse-path').value='/';
+    renderFileSource();
+    document.getElementById('attach-modal').classList.add('show');
+}
+function hideAttachModal(){document.getElementById('attach-modal').classList.remove('show');}
+
+function switchFileSource(src){
+    fileSource=src;
+    selectedFiles=[];
+    document.querySelectorAll('.file-source-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.file-source-tab[data-source="'+src+'"]').classList.add('active');
+    renderFileSource();
+}
+
+function renderFileSource(){
+    var container=document.getElementById('file-source-content');
+    if(fileSource==='upload'){
+        container.innerHTML='<div class="upload-zone" onclick="document.getElementById(\\'upload-input\\').click()"><div class="icon">&#128228;</div><div class="text">Click to upload file</div></div><input type="file" id="upload-input" style="display:none" onchange="handleUpload(this)">';
+    }else{
+        container.innerHTML='<div class="file-path-input"><input type="text" class="form-input" id="browse-path" placeholder="/" value="/"><button class="btn btn-secondary" onclick="browsePath()">Go</button></div><div class="file-list" id="file-list"><div style="padding:20px;text-align:center;color:#64748b">Loading...</div></div>';
+        browsePath();
+    }
+}
+
+function browsePath(){
+    var path=document.getElementById('browse-path').value||'/';
+    var url=fileSource==='s3'?'/api/s3/list?path='+encodeURIComponent(path):'/api/workspace/list?path='+encodeURIComponent(path);
+    fetch(url).then(r=>r.json()).then(d=>{
+        var list=document.getElementById('file-list');
+        var items=d.files||d.items||[];
+        if(!items.length){
+            list.innerHTML='<div style="padding:20px;text-align:center;color:#64748b">Empty folder</div>';
+            return;
+        }
+        var html='';
+        if(path!=='/'){
+            var parent=path.split('/').slice(0,-1).join('/')||'/';
+            html+='<div class="file-item" onclick="document.getElementById(\\'browse-path\\').value=\\''+parent+'\\';browsePath()"><span class="icon">&#128193;</span><span class="name">..</span></div>';
+        }
+        items.forEach(f=>{
+            var isDir=f.type==='dir'||f.is_dir;
+            var icon=isDir?'&#128193;':'&#128196;';
+            var fullPath=(path==='/'?'':path)+'/'+f.name;
+            if(isDir){
+                html+='<div class="file-item" onclick="document.getElementById(\\'browse-path\\').value=\\''+fullPath+'\\';browsePath()"><span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span></div>';
+            }else{
+                var sel=selectedFiles.find(x=>x.path===fullPath)?'selected':'';
+                html+='<div class="file-item '+sel+'" onclick="toggleFileSelect(\\''+fullPath+'\\',\\''+escapeHtml(f.name)+'\\',this)"><span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span><span class="path">'+escapeHtml(fullPath)+'</span></div>';
+            }
+        });
+        list.innerHTML=html;
+    }).catch(e=>{
+        document.getElementById('file-list').innerHTML='<div style="padding:20px;text-align:center;color:#ef4444">Error loading</div>';
+    });
+}
+
+function toggleFileSelect(path,name,el){
+    var idx=selectedFiles.findIndex(x=>x.path===path);
+    if(idx>=0){
+        selectedFiles.splice(idx,1);
+        el.classList.remove('selected');
+    }else{
+        selectedFiles.push({path:path,name:name,source:fileSource});
+        el.classList.add('selected');
+    }
+}
+
+function handleUpload(input){
+    var file=input.files[0];
+    if(!file)return;
+    selectedFiles=[{name:file.name,source:'upload',file:file}];
+    showToast('File ready: '+file.name,'info');
+}
+
+function attachSelected(){
+    if(!selectedFiles.length){showToast('Select files first','error');return;}
+    if(!currentTask)return;
+    var attachments=currentTask.attachments||[];
+    selectedFiles.forEach(f=>{
+        if(f.source==='upload'){
+            // For upload, we'll just save reference (actual upload would need backend support)
+            attachments.push({name:f.name,source:'upload',path:'uploaded'});
+        }else{
+            attachments.push({name:f.name,source:f.source,path:f.path});
+        }
+    });
+    fetch('/api/todos/'+currentTask._id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({attachments:attachments})})
+    .then(r=>r.json()).then(d=>{
+        if(!d.error){
+            currentTask.attachments=attachments;
+            renderDetail(currentTask);
+            hideAttachModal();
+            showToast('Attached '+selectedFiles.length+' file(s)','success');
+        }
+    });
+}
+
+function removeAttachment(idx){
+    if(!currentTask)return;
+    var attachments=currentTask.attachments||[];
+    attachments.splice(idx,1);
+    fetch('/api/todos/'+currentTask._id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({attachments:attachments})})
+    .then(r=>r.json()).then(d=>{
+        if(!d.error){currentTask.attachments=attachments;renderDetail(currentTask);}
+    });
+}
+
+function openAttachment(idx){
+    if(!currentTask)return;
+    var a=currentTask.attachments[idx];
+    if(a.source==='workspace'){
+        window.open('/user/'+currentUser+'/lab/tree'+a.path,'_blank');
+    }else if(a.source==='s3'){
+        window.open('/api/s3/download?path='+encodeURIComponent(a.path),'_blank');
+    }
+}
+
 function setupSocket(){
     socket.on('task_assigned',function(data){
-        showNotification('&#128229;','New Task Assigned',data.title+' from '+data.from_user);
+        showToast('New task: '+data.title+' from '+data.from_user,'info');
         loadTasks();
     });
-    socket.on('task_updated',function(data){
-        loadTasks();
-    });
+    socket.on('task_updated',function(data){loadTasks();});
     socket.on('task_completed',function(data){
-        showNotification('&#9989;','Task Completed',data.title+' by '+data.by_user);
+        showToast('Task completed: '+data.title,'success');
         loadTasks();
     });
     socket.on('comment_added',function(data){
-        showNotification('&#128172;','New Comment',data.user+' commented on '+data.task_title);
+        showToast(data.user+' commented on '+data.task_title,'info');
         loadTasks();
+        if(currentTask&&currentTask._id===data.task_id){
+            fetch('/api/todos/'+currentTask._id).then(r=>r.json()).then(t=>{
+                if(t.task){currentTask=t.task;renderDetail(currentTask);}
+            });
+        }
     });
 }
 
-function showNotification(icon,title,body){
-    var el=document.getElementById('notification');
-    document.getElementById('notif-icon').innerHTML=icon;
-    document.getElementById('notif-title').textContent=title;
-    document.getElementById('notif-body').textContent=body;
-    el.classList.add('show');
-    setTimeout(function(){el.classList.remove('show');},5000);
-}
-
-function escapeHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';}
-function formatDate(d){if(!d)return'';var dt=new Date(d);return dt.toLocaleDateString('vi-VN');}
+function escapeHtml(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';}
+function formatDate(d){if(!d)return'';return new Date(d).toLocaleDateString('vi-VN');}
 function formatDateTime(d){if(!d)return'';var dt=new Date(d);return dt.toLocaleDateString('vi-VN')+' '+dt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});}
 
 init();
@@ -6825,7 +7196,10 @@ def api_share_with_user():
         db = get_db()
 
         # Check recipient exists and is not admin
-        recipient = db.users.find_one({'username': to_user, 'role': {'$ne': 'admin'}})
+        recipient = db.users.find_one({
+            'username': to_user,
+            '$or': [{'role': {'$ne': 'admin'}}, {'role': {'$exists': False}}]
+        })
         if not recipient:
             return jsonify({'error': 'User not found'}), 404
 
