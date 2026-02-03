@@ -4044,10 +4044,11 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
 .controls button.active{color:#6366f1}
 .controls .play-btn{background:#6366f1;width:48px;height:48px;border-radius:50%;font-size:22px;display:flex;align-items:center;justify-content:center}
 .controls .play-btn:hover{background:#4f46e5;transform:scale(1.05)}
-.secondary-controls{display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:8px}
-.secondary-controls button{background:transparent;border:none;color:#94a3b8;font-size:16px;cursor:pointer;padding:4px}
-.secondary-controls button:hover{color:#e2e8f0}
-.secondary-controls button.active{color:#6366f1}
+.secondary-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px}
+.secondary-controls button{background:#1e293b;border:1px solid #334155;color:#94a3b8;font-size:14px;cursor:pointer;padding:8px 14px;border-radius:8px;display:flex;align-items:center;gap:6px;transition:all .2s}
+.secondary-controls button:hover{background:#334155;color:#e2e8f0;border-color:#475569}
+.secondary-controls button.active{background:rgba(99,102,241,.2);border-color:#6366f1;color:#6366f1}
+.secondary-controls button .mode{font-size:10px;background:#6366f1;color:#fff;padding:1px 4px;border-radius:3px;margin-left:2px}
 .playlist{flex:1;background:#1e293b;border-radius:8px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:120px}
 .playlist-header{padding:12px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
 .playlist-header h4{margin:0;font-size:13px}
@@ -4141,8 +4142,8 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
         </div>
 
         <div class="secondary-controls">
-            <button id="shuffle-btn" onclick="toggleShuffle()" title="Shuffle">&#128256;</button>
-            <button id="repeat-btn" onclick="toggleRepeat()" title="Repeat">&#128257;</button>
+            <button id="shuffle-btn" onclick="toggleShuffle()" title="Shuffle">&#128256; Shuffle</button>
+            <button id="repeat-btn" onclick="toggleRepeat()" title="Repeat">&#128257; Repeat<span class="mode" id="repeat-mode" style="display:none"></span></button>
         </div>
 
         <div class="playlist">
@@ -4193,6 +4194,28 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="hideS3Modal()">Cancel</button>
             <button class="btn btn-primary" onclick="importSelected()">Import</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="invite-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#128101; Invite to Room</h3>
+            <button class="close-btn" onclick="hideInviteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div style="text-align:center;margin-bottom:16px">
+                <div style="font-size:13px;color:#94a3b8;margin-bottom:8px">Share this code:</div>
+                <div style="font-size:32px;font-weight:700;letter-spacing:6px;color:#6366f1" id="invite-code">------</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="invite-link" readonly style="flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:12px">
+                <button class="btn btn-primary" onclick="copyInviteLink()">Copy</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideInviteModal()">Close</button>
         </div>
     </div>
 </div>
@@ -4343,7 +4366,18 @@ function updateNowPlaying(){
 function updateControls(){
     document.getElementById('play-btn').innerHTML=roomState.is_playing?'&#10074;&#10074;':'&#9658;';
     document.getElementById('shuffle-btn').classList.toggle('active',roomState.shuffle);
-    document.getElementById('repeat-btn').classList.toggle('active',roomState.repeat!=='none');
+    var repeatBtn=document.getElementById('repeat-btn');
+    var repeatMode=document.getElementById('repeat-mode');
+    repeatBtn.classList.toggle('active',roomState.repeat!=='none');
+    if(roomState.repeat==='one'){
+        repeatMode.textContent='1';
+        repeatMode.style.display='inline';
+    }else if(roomState.repeat==='all'){
+        repeatMode.textContent='All';
+        repeatMode.style.display='inline';
+    }else{
+        repeatMode.style.display='none';
+    }
 }
 
 function togglePlay(){
@@ -4481,8 +4515,19 @@ function importSelected(){
 }
 
 function showInvite(){
-    var code=roomState.code||'';
-    prompt('Share this code to invite others:',code);
+    var code=roomState.code||'------';
+    document.getElementById('invite-code').textContent=code;
+    document.getElementById('invite-link').value=location.origin+'/embed/music-room?code='+code;
+    document.getElementById('invite-modal').classList.add('show');
+}
+
+function hideInviteModal(){
+    document.getElementById('invite-modal').classList.remove('show');
+}
+
+function copyInviteLink(){
+    var input=document.getElementById('invite-link');
+    navigator.clipboard.writeText(input.value).then(()=>showToast('Link copied!','success'));
 }
 
 function setupAudio(){
@@ -4599,6 +4644,9 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
 .session-item .info{font-size:12px;color:#94a3b8;display:flex;gap:12px}
 .session-item .lock{color:#f59e0b}
 .session-item .code{background:#6366f1;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:1px;margin-left:8px}
+.session-item .delete-btn{position:absolute;top:10px;right:10px;background:#ef4444;border:none;color:#fff;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:14px;opacity:0;transition:opacity .2s}
+.session-item:hover .delete-btn{opacity:1}
+.session-item .delete-btn:hover{background:#dc2626}
 .start-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
 .start-section h3{margin:0 0 12px 0;font-size:14px}
 .join-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
@@ -4808,6 +4856,9 @@ function loadSessions(){
         var html='';
         d.sessions.forEach(s=>{
             html+='<div class="session-item" onclick="joinSession(\\''+s._id+'\\','+s.has_password+')">';
+            if(s.host_user===currentUser){
+                html+='<button class="delete-btn" onclick="event.stopPropagation();deleteSession(\\''+s._id+'\\')">&#10005;</button>';
+            }
             html+='<div class="title">'+escapeHtml(s.title)+(s.has_password?' <span class="lock">&#128274;</span>':'');
             if(s.code)html+='<span class="code">'+s.code+'</span>';
             html+='</div>';
@@ -4816,6 +4867,11 @@ function loadSessions(){
         });
         list.innerHTML=html;
     });
+}
+
+function deleteSession(sessionId){
+    if(!confirm('Delete this session?'))return;
+    socket.emit('delete_screen_session',{session_id:sessionId});
 }
 
 function joinByCode(){
@@ -5033,6 +5089,10 @@ function setupSocket(){
     socket.on('screen_session_ended',function(){
         showToast('Host ended the session','info');
         leaveSession();
+    });
+    socket.on('screen_session_deleted',function(){
+        showToast('Session deleted','success');
+        loadSessions();
     });
 }
 
@@ -9754,6 +9814,7 @@ def handle_music_next(data):
         playlist = room.get('playlist', [])
         current = room.get('current_track', 0)
         repeat = room.get('repeat', 'none')
+        stop_playing = False
 
         if repeat == 'one':
             next_track = current
@@ -9766,11 +9827,17 @@ def handle_music_next(data):
                 if repeat == 'all':
                     next_track = 0
                 else:
-                    next_track = current
+                    # Playlist ended, stop playback
+                    next_track = 0
+                    stop_playing = True
+
+        update_fields = {'current_track': next_track, 'current_time': 0, 'updated_at': datetime.utcnow()}
+        if stop_playing:
+            update_fields['is_playing'] = False
 
         db.music_rooms.update_one(
             {'_id': room_id},
-            {'$set': {'current_track': next_track, 'current_time': 0, 'updated_at': datetime.utcnow()}}
+            {'$set': update_fields}
         )
 
         room = db.music_rooms.find_one({'_id': room_id})
@@ -10218,6 +10285,26 @@ def handle_stop_screen_share(data):
 
     except Exception as e:
         app.logger.error(f"Stop screen share error: {e}")
+
+@socketio.on('delete_screen_session')
+def handle_delete_screen_session(data):
+    """Delete screen share session from list"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id, 'host_user': username})
+        if sess:
+            db.screen_sessions.delete_one({'_id': session_id})
+            emit('screen_session_ended', {}, room=f'screen_{session_id}')
+            emit('screen_session_deleted', {'session_id': session_id})
+
+    except Exception as e:
+        app.logger.error(f"Delete screen session error: {e}")
 
 @socketio.on('join_screen_session')
 def handle_join_screen_session(data):
