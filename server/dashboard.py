@@ -4987,6 +4987,76 @@ def onlyoffice_file_stream():
         return str(e), 500
 
 
+@app.route('/api/onlyoffice/callback', methods=['POST'])
+def onlyoffice_callback():
+    """Handle OnlyOffice save callback"""
+    token = request.args.get('token', '')
+    payload = verify_onlyoffice_token(token)
+    if not payload:
+        return jsonify({'error': 1}), 401
+
+    source = payload['source']
+    path = payload['path']
+    username = payload['username']
+
+    try:
+        data = request.json
+        status = data.get('status', 0)
+        app.logger.info(f"OnlyOffice callback: status={status}, source={source}, path={path}")
+
+        # Status 2 = document ready to save, 6 = forcesave
+        if status in (2, 6):
+            download_url = data.get('url')
+            if not download_url:
+                return jsonify({'error': 1})
+
+            # Download modified file from OnlyOffice
+            import requests as http_requests
+            resp = http_requests.get(download_url, timeout=60)
+            if resp.status_code != 200:
+                app.logger.error(f"Failed to download from OnlyOffice: {resp.status_code}")
+                return jsonify({'error': 1})
+
+            file_data = resp.content
+            db = get_db()
+
+            if source == 'workspace':
+                # Save to workspace
+                workspace_path = f"/home/{username}/workspace/{path}"
+                os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
+                with open(workspace_path, 'wb') as f:
+                    f.write(file_data)
+                app.logger.info(f"Saved to workspace: {workspace_path}")
+
+            elif source == 's3':
+                # Save to user's S3
+                cfg = get_s3_config(db, username)
+                if cfg:
+                    ok, result = upload_to_s3(cfg, os.path.dirname(path), os.path.basename(path), file_data)
+                    if ok:
+                        app.logger.info(f"Saved to S3: {path}")
+                    else:
+                        app.logger.error(f"Failed to save to S3: {result}")
+                        return jsonify({'error': 1})
+
+            elif source == 'shared':
+                # Save to shared space
+                cfg = get_shared_s3_config(db)
+                if cfg:
+                    ok, result = upload_to_s3(cfg, os.path.dirname(path), os.path.basename(path), file_data)
+                    if ok:
+                        app.logger.info(f"Saved to shared: {path}")
+                    else:
+                        app.logger.error(f"Failed to save to shared: {result}")
+                        return jsonify({'error': 1})
+
+        return jsonify({'error': 0})  # Success
+
+    except Exception as e:
+        app.logger.error(f"OnlyOffice callback error: {e}")
+        return jsonify({'error': 1})
+
+
 @app.route('/api/workspace/file')
 def workspace_file_stream():
     """Stream file from workspace"""
@@ -5235,6 +5305,12 @@ def file_viewer(source):
         # Generate token for OnlyOffice file access
         file_token = generate_onlyoffice_token(source, path, username)
         file_url_full = f"{ONLYOFFICE_FILE_HOST}/api/onlyoffice/file?token={file_token}"
+        callback_url = f"{ONLYOFFICE_FILE_HOST}/api/onlyoffice/callback?token={file_token}"
+
+        # Check if file is editable (office formats only)
+        editable_exts = ['doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'csv', 'ppt', 'pptx', 'odp']
+        can_edit = ext in editable_exts
+
         # OnlyOffice config
         config = {
             "document": {
@@ -5246,24 +5322,31 @@ def file_viewer(source):
                     "download": True,
                     "print": True,
                     "copy": True,
-                    "edit": False,
+                    "edit": can_edit,
+                    "review": False,
+                    "comment": False,
                 }
             },
             "documentType": doc_type,
             "editorConfig": {
-                "mode": "view",
+                "mode": "edit" if can_edit else "view",
                 "lang": "vi",
+                "callbackUrl": callback_url if can_edit else None,
                 "customization": {
-                    "forcesave": False,
+                    "forcesave": True,
+                    "autosave": True,
                     "hideRightMenu": True,
                     "compactHeader": True,
-                    "toolbarNoTabs": True,
-                    "compactToolbar": True,
+                    "toolbarNoTabs": False,
+                    "compactToolbar": False,
                 }
             },
             "height": "100%",
             "width": "100%",
         }
+        # Remove None values
+        if not can_edit:
+            del config["editorConfig"]["callbackUrl"]
         # Sign with JWT for OnlyOffice API (disabled when JWT_ENABLED=false)
         # token = jwt.encode(config, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
         # config['token'] = token
