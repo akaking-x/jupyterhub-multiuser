@@ -39,6 +39,7 @@ from s3_manager import (
     get_shared_s3_config, get_chat_s3_config, list_s3_recursive,
     stream_s3_object, stream_s3_folder_as_zip, read_s3_text,
     move_s3_items, copy_s3_to_workspace,
+    get_music_s3_config, list_audio_files, stream_audio, upload_music_file,
 )
 
 app = Flask(__name__)
@@ -413,6 +414,9 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     {% if has_s3 %}<div class="desktop-icon" ondblclick="openWindow('myshares')"><div class="icon">&#128279;</div><div class="label">My Shares</div></div>{% endif %}
     <div class="desktop-icon" ondblclick="openWindow('usershares')"><div class="icon">&#128229;</div><div class="label">User Shares</div></div>
     <div class="desktop-icon" ondblclick="openWindow('chat')"><div class="icon">&#128172;</div><div class="label">Chat</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('screenshare')"><div class="icon">&#128250;</div><div class="label">Screen Share</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('musicroom')"><div class="icon">&#127925;</div><div class="label">Music Room</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('todo')"><div class="icon">&#128203;</div><div class="label">Todo</div></div>
     <div class="desktop-icon" ondblclick="openWindow('browser')"><div class="icon">&#127760;</div><div class="label">Browser</div></div>
     <div class="desktop-icon" ondblclick="openWindow('balatro')"><div class="icon">&#127183;</div><div class="label">Balatro</div></div>
     <div class="desktop-icon" ondblclick="openWindow('gamehub')"><div class="icon">&#127918;</div><div class="label">GameHub</div></div>
@@ -438,6 +442,9 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
         {% if has_s3 %}<a class="menu-item" href="#" onclick="openWindow('myshares');hideStartMenu()"><span class="icon">&#128279;</span><div class="text"><span>My Shares</span><small>Shared Links</small></div></a>{% endif %}
         <a class="menu-item" href="#" onclick="openWindow('usershares');hideStartMenu()"><span class="icon">&#128229;</span><div class="text"><span>User Shares</span><small>Shared with you</small></div></a>
         <a class="menu-item" href="#" onclick="openWindow('chat');hideStartMenu()"><span class="icon">&#128172;</span><div class="text"><span>Chat</span><small>Message users</small></div></a>
+        <a class="menu-item" href="#" onclick="openWindow('screenshare');hideStartMenu()"><span class="icon">&#128250;</span><div class="text"><span>Screen Share</span><small>Share your screen</small></div></a>
+        <a class="menu-item" href="#" onclick="openWindow('musicroom');hideStartMenu()"><span class="icon">&#127925;</span><div class="text"><span>Music Room</span><small>Listen together</small></div></a>
+        <a class="menu-item" href="#" onclick="openWindow('todo');hideStartMenu()"><span class="icon">&#128203;</span><div class="text"><span>Todo</span><small>Tasks & Notes</small></div></a>
     </div>
     <div class="menu-divider"></div>
     <div class="menu-section">
@@ -449,7 +456,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},gamehub:{title:'GameHub',icon:'&#127918;',url:'/gamehub/',w:1200,h:750},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},gamehub:{title:'GameHub',icon:'&#127918;',url:'/gamehub/',w:1200,h:750},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450},screenshare:{title:'Screen Share',icon:'&#128250;',url:'/embed/screen-share',w:1000,h:700},musicroom:{title:'Music Room',icon:'&#127925;',url:'/embed/music-room',w:500,h:700},todo:{title:'Todo',icon:'&#128203;',url:'/embed/todo',w:900,h:600}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -3598,6 +3605,1339 @@ init();
 </script></body></html>"""
 
 # ===========================================
+# EMBED_TODO - Task/Notes Management
+# ===========================================
+
+EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+.todo-container{display:flex;height:calc(100vh - 24px);gap:12px}
+.todo-sidebar{width:220px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.todo-sidebar .tabs{display:flex;flex-direction:column;padding:8px}
+.todo-sidebar .tab{padding:12px 14px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.todo-sidebar .tab:hover{background:#334155}
+.todo-sidebar .tab.active{background:rgba(99,102,241,.2);color:#818cf8}
+.todo-sidebar .tab .count{background:#334155;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:auto}
+.todo-sidebar .tab.active .count{background:#6366f1;color:#fff}
+.todo-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.todo-header{padding:14px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.todo-header h2{font-size:16px;margin:0}
+.todo-filters{display:flex;gap:8px;align-items:center}
+.todo-filters select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:12px}
+.todo-list{flex:1;overflow-y:auto;padding:12px}
+.todo-item{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
+.todo-item:hover{border-color:#6366f1}
+.todo-item.completed{opacity:0.6}
+.todo-item .header{display:flex;align-items:flex-start;gap:10px}
+.todo-item .checkbox{width:20px;height:20px;border:2px solid #475569;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px}
+.todo-item .checkbox:hover{border-color:#6366f1}
+.todo-item.completed .checkbox{background:#10b981;border-color:#10b981;color:#fff}
+.todo-item .title{font-size:14px;font-weight:500;flex:1}
+.todo-item .meta{display:flex;gap:8px;margin-top:8px;margin-left:30px;flex-wrap:wrap}
+.todo-item .tag{font-size:11px;padding:2px 8px;border-radius:4px}
+.todo-item .tag.priority-high{background:rgba(239,68,68,.2);color:#ef4444}
+.todo-item .tag.priority-medium{background:rgba(245,158,11,.2);color:#f59e0b}
+.todo-item .tag.priority-low{background:rgba(99,102,241,.2);color:#818cf8}
+.todo-item .due{font-size:11px;color:#94a3b8}
+.todo-item .due.overdue{color:#ef4444}
+.todo-item .assignee{font-size:11px;color:#10b981}
+.todo-empty{text-align:center;padding:40px;color:#64748b}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.show{display:flex}
+.modal{background:#1e293b;border-radius:12px;border:1px solid #334155;width:500px;max-height:90vh;display:flex;flex-direction:column}
+.modal-header{padding:16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{margin:0;font-size:16px}
+.modal-header .close-btn{background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer}
+.modal-body{padding:16px;flex:1;overflow-y:auto}
+.modal-footer{padding:16px;border-top:1px solid #334155;display:flex;justify-content:space-between;gap:8px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
+.form-group input,.form-group textarea,.form-group select{width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px 12px;color:#e2e8f0;font-size:13px}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:#6366f1}
+.form-group textarea{min-height:80px;resize:vertical}
+.form-row{display:flex;gap:12px}
+.form-row .form-group{flex:1}
+.comments-section{margin-top:16px;border-top:1px solid #334155;padding-top:16px}
+.comments-section h4{font-size:13px;margin-bottom:10px;color:#94a3b8}
+.comment{background:#0f172a;border-radius:8px;padding:10px;margin-bottom:8px}
+.comment .header{display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:4px}
+.comment .text{font-size:13px}
+.add-comment{display:flex;gap:8px}
+.add-comment input{flex:1}
+.notification{position:fixed;bottom:20px;right:20px;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.4);z-index:2000;display:none;max-width:300px}
+.notification.show{display:block;animation:slideIn .3s ease}
+@keyframes slideIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.notification .icon{font-size:20px;margin-bottom:8px}
+.notification .title{font-weight:600;font-size:14px;margin-bottom:4px}
+.notification .body{font-size:12px;color:#94a3b8}
+</style>
+</head><body>
+<div class="container" style="padding:12px;height:100vh;overflow:hidden;box-sizing:border-box">
+    <div class="todo-container">
+        <div class="todo-sidebar">
+            <div class="tabs">
+                <div class="tab active" data-tab="my" onclick="switchTab('my')"><span>&#128203;</span> My Tasks <span class="count" id="count-my">0</span></div>
+                <div class="tab" data-tab="assigned" onclick="switchTab('assigned')"><span>&#128229;</span> Assigned to Me <span class="count" id="count-assigned">0</span></div>
+                <div class="tab" data-tab="created" onclick="switchTab('created')"><span>&#128228;</span> Created by Me <span class="count" id="count-created">0</span></div>
+            </div>
+        </div>
+        <div class="todo-main">
+            <div class="todo-header">
+                <h2 id="current-tab-title">My Tasks</h2>
+                <div class="todo-filters">
+                    <select id="filter-status" onchange="loadTasks()">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                    <select id="filter-priority" onchange="loadTasks()">
+                        <option value="">All Priority</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                    <button class="btn btn-success btn-sm" onclick="showNewTask()">+ New Task</button>
+                </div>
+            </div>
+            <div class="todo-list" id="todo-list"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="task-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modal-title">New Task</h3>
+            <button class="close-btn" onclick="hideModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="task-id">
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" id="task-title" placeholder="Task title...">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="task-desc" placeholder="Task description..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Assignee</label>
+                    <select id="task-assignee">
+                        <option value="">Self (My Task)</option>
+                        <option value="__all__">Everyone</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="task-priority">
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="task-status">
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Due Date</label>
+                    <input type="date" id="task-due">
+                </div>
+            </div>
+            <div class="comments-section" id="comments-section" style="display:none">
+                <h4>Comments</h4>
+                <div id="comments-list"></div>
+                <div class="add-comment">
+                    <input type="text" id="new-comment" placeholder="Add a comment...">
+                    <button class="btn btn-primary btn-sm" onclick="addComment()">Send</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger btn-sm" id="delete-task-btn" style="display:none" onclick="deleteTask()">Delete</button>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="hideModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTask()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="notification" id="notification">
+    <div class="icon" id="notif-icon">&#128203;</div>
+    <div class="title" id="notif-title"></div>
+    <div class="body" id="notif-body"></div>
+</div>
+
+<script>
+var socket=io();
+var currentUser='{{ username }}';
+var currentTab='my';
+var tasks=[];
+var users=[];
+
+function init(){
+    loadUsers();
+    loadTasks();
+    setupSocket();
+}
+
+function loadUsers(){
+    fetch('/api/todos/users').then(r=>r.json()).then(d=>{
+        users=d.users||[];
+        var sel=document.getElementById('task-assignee');
+        sel.innerHTML='<option value="">Self (My Task)</option><option value="__all__">Everyone</option>';
+        users.forEach(u=>{
+            if(u!==currentUser)sel.innerHTML+='<option value="'+u+'">'+u+'</option>';
+        });
+    });
+}
+
+function loadTasks(){
+    var status=document.getElementById('filter-status').value;
+    var priority=document.getElementById('filter-priority').value;
+    var url='/api/todos?tab='+currentTab;
+    if(status)url+='&status='+status;
+    if(priority)url+='&priority='+priority;
+    fetch(url).then(r=>r.json()).then(d=>{
+        tasks=d.tasks||[];
+        renderTasks();
+        updateCounts(d.counts||{});
+    });
+}
+
+function updateCounts(counts){
+    document.getElementById('count-my').textContent=counts.my||0;
+    document.getElementById('count-assigned').textContent=counts.assigned||0;
+    document.getElementById('count-created').textContent=counts.created||0;
+}
+
+function switchTab(tab){
+    currentTab=tab;
+    document.querySelectorAll('.todo-sidebar .tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="'+tab+'"]').classList.add('active');
+    var titles={'my':'My Tasks','assigned':'Assigned to Me','created':'Created by Me'};
+    document.getElementById('current-tab-title').textContent=titles[tab];
+    loadTasks();
+}
+
+function renderTasks(){
+    var list=document.getElementById('todo-list');
+    if(!tasks.length){
+        list.innerHTML='<div class="todo-empty"><div style="font-size:40px;margin-bottom:10px">&#128203;</div>No tasks found</div>';
+        return;
+    }
+    var html='';
+    tasks.forEach(t=>{
+        var isCompleted=t.status==='completed';
+        var priorityClass='priority-'+t.priority;
+        var dueClass='';
+        if(t.due_date&&!isCompleted){
+            var due=new Date(t.due_date);
+            var today=new Date();today.setHours(0,0,0,0);
+            if(due<today)dueClass='overdue';
+        }
+        html+='<div class="todo-item'+(isCompleted?' completed':'')+'" onclick="showTask(\\''+t._id+'\\')">';
+        html+='<div class="header">';
+        html+='<div class="checkbox" onclick="event.stopPropagation();toggleStatus(\\''+t._id+'\\',\\''+t.status+'\\')">'+(isCompleted?'&#10003;':'')+'</div>';
+        html+='<div class="title">'+escapeHtml(t.title)+'</div>';
+        html+='</div>';
+        html+='<div class="meta">';
+        html+='<span class="tag '+priorityClass+'">'+t.priority+'</span>';
+        if(t.due_date)html+='<span class="due '+dueClass+'">Due: '+formatDate(t.due_date)+'</span>';
+        if(t.assignee&&t.assignee!==currentUser)html+='<span class="assignee">To: '+t.assignee+'</span>';
+        if(t.creator&&t.creator!==currentUser)html+='<span class="assignee">From: '+t.creator+'</span>';
+        html+='</div></div>';
+    });
+    list.innerHTML=html;
+}
+
+function showNewTask(){
+    document.getElementById('modal-title').textContent='New Task';
+    document.getElementById('task-id').value='';
+    document.getElementById('task-title').value='';
+    document.getElementById('task-desc').value='';
+    document.getElementById('task-assignee').value='';
+    document.getElementById('task-priority').value='medium';
+    document.getElementById('task-status').value='pending';
+    document.getElementById('task-due').value='';
+    document.getElementById('comments-section').style.display='none';
+    document.getElementById('delete-task-btn').style.display='none';
+    document.getElementById('task-modal').classList.add('show');
+}
+
+function showTask(id){
+    var t=tasks.find(x=>x._id===id);
+    if(!t)return;
+    document.getElementById('modal-title').textContent='Edit Task';
+    document.getElementById('task-id').value=t._id;
+    document.getElementById('task-title').value=t.title;
+    document.getElementById('task-desc').value=t.description||'';
+    document.getElementById('task-assignee').value=t.assignee||'';
+    document.getElementById('task-priority').value=t.priority;
+    document.getElementById('task-status').value=t.status;
+    document.getElementById('task-due').value=t.due_date?t.due_date.split('T')[0]:'';
+    document.getElementById('delete-task-btn').style.display=t.creator===currentUser?'block':'none';
+    // Comments
+    var canEdit=t.creator===currentUser||t.assignee===currentUser||t.assignee==='__all__';
+    if(canEdit){
+        document.getElementById('comments-section').style.display='block';
+        renderComments(t.comments||[]);
+    }else{
+        document.getElementById('comments-section').style.display='none';
+    }
+    document.getElementById('task-modal').classList.add('show');
+}
+
+function renderComments(comments){
+    var html='';
+    comments.forEach(c=>{
+        html+='<div class="comment"><div class="header"><span>'+c.user+'</span><span>'+formatDateTime(c.created_at)+'</span></div><div class="text">'+escapeHtml(c.text)+'</div></div>';
+    });
+    document.getElementById('comments-list').innerHTML=html||'<div style="color:#64748b;font-size:12px">No comments yet</div>';
+}
+
+function hideModal(){
+    document.getElementById('task-modal').classList.remove('show');
+}
+
+function saveTask(){
+    var id=document.getElementById('task-id').value;
+    var data={
+        title:document.getElementById('task-title').value.trim(),
+        description:document.getElementById('task-desc').value.trim(),
+        assignee:document.getElementById('task-assignee').value,
+        priority:document.getElementById('task-priority').value,
+        status:document.getElementById('task-status').value,
+        due_date:document.getElementById('task-due').value||null
+    };
+    if(!data.title){alert('Title is required');return;}
+    var url=id?'/api/todos/'+id:'/api/todos';
+    var method=id?'PUT':'POST';
+    fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+    .then(r=>r.json()).then(d=>{
+        if(d.error){alert(d.error);return;}
+        hideModal();
+        loadTasks();
+    });
+}
+
+function deleteTask(){
+    var id=document.getElementById('task-id').value;
+    if(!id||!confirm('Delete this task?'))return;
+    fetch('/api/todos/'+id,{method:'DELETE'}).then(r=>r.json()).then(d=>{
+        hideModal();
+        loadTasks();
+    });
+}
+
+function toggleStatus(id,current){
+    var newStatus=current==='completed'?'pending':'completed';
+    fetch('/api/todos/'+id+'/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
+    .then(r=>r.json()).then(d=>loadTasks());
+}
+
+function addComment(){
+    var id=document.getElementById('task-id').value;
+    var text=document.getElementById('new-comment').value.trim();
+    if(!id||!text)return;
+    fetch('/api/todos/'+id+'/comment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})
+    .then(r=>r.json()).then(d=>{
+        document.getElementById('new-comment').value='';
+        // Reload task to get updated comments
+        fetch('/api/todos/'+id).then(r=>r.json()).then(t=>{
+            if(t.task)renderComments(t.task.comments||[]);
+        });
+    });
+}
+
+function setupSocket(){
+    socket.on('task_assigned',function(data){
+        showNotification('&#128229;','New Task Assigned',data.title+' from '+data.from_user);
+        loadTasks();
+    });
+    socket.on('task_updated',function(data){
+        loadTasks();
+    });
+    socket.on('task_completed',function(data){
+        showNotification('&#9989;','Task Completed',data.title+' by '+data.by_user);
+        loadTasks();
+    });
+    socket.on('comment_added',function(data){
+        showNotification('&#128172;','New Comment',data.user+' commented on '+data.task_title);
+        loadTasks();
+    });
+}
+
+function showNotification(icon,title,body){
+    var el=document.getElementById('notification');
+    document.getElementById('notif-icon').innerHTML=icon;
+    document.getElementById('notif-title').textContent=title;
+    document.getElementById('notif-body').textContent=body;
+    el.classList.add('show');
+    setTimeout(function(){el.classList.remove('show');},5000);
+}
+
+function escapeHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';}
+function formatDate(d){if(!d)return'';var dt=new Date(d);return dt.toLocaleDateString('vi-VN');}
+function formatDateTime(d){if(!d)return'';var dt=new Date(d);return dt.toLocaleDateString('vi-VN')+' '+dt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});}
+
+init();
+</script></body></html>"""
+
+# ===========================================
+# EMBED_MUSIC_ROOM - Listen to music together
+# ===========================================
+
+EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+.music-container{max-width:480px;margin:0 auto;padding:12px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column}
+.room-list{flex:1;overflow-y:auto}
+.room-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
+.room-item:hover{border-color:#6366f1}
+.room-item .title{font-size:15px;font-weight:600;margin-bottom:4px}
+.room-item .info{font-size:12px;color:#94a3b8;display:flex;gap:12px}
+.room-create{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:16px}
+.room-create h3{margin:0 0 12px 0;font-size:14px}
+.room-join{display:flex;gap:8px;margin-bottom:16px}
+.room-join input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:13px;text-transform:uppercase;letter-spacing:2px}
+.room-join input:focus{outline:none;border-color:#6366f1}
+.player-view{display:none;flex-direction:column;height:100%}
+.player-view.show{display:flex}
+.player-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #334155}
+.player-header .room-info{display:flex;align-items:center;gap:12px}
+.player-header .room-title{font-size:16px;font-weight:600}
+.player-header .room-code{background:#6366f1;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:1px;cursor:pointer}
+.player-header .room-code:hover{background:#4f46e5}
+.now-playing{background:#1e293b;border-radius:12px;padding:20px;margin:16px 0;text-align:center}
+.now-playing .icon{font-size:60px;margin-bottom:12px;opacity:0.5}
+.now-playing .track-name{font-size:18px;font-weight:600;margin-bottom:8px}
+.now-playing .track-info{font-size:12px;color:#94a3b8}
+.progress-container{margin:16px 0}
+.progress-bar{height:6px;background:#334155;border-radius:3px;cursor:pointer;position:relative}
+.progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:3px;transition:width .1s}
+.progress-bar:hover .progress-fill{background:linear-gradient(90deg,#818cf8,#a78bfa)}
+.time-display{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-top:6px}
+.controls{display:flex;align-items:center;justify-content:center;gap:16px;margin:16px 0}
+.controls button{background:transparent;border:none;color:#e2e8f0;font-size:24px;cursor:pointer;padding:8px;border-radius:50%;transition:all .2s}
+.controls button:hover{background:#334155;transform:scale(1.1)}
+.controls button.active{color:#6366f1}
+.controls .play-btn{background:#6366f1;width:56px;height:56px;border-radius:50%;font-size:28px;display:flex;align-items:center;justify-content:center}
+.controls .play-btn:hover{background:#4f46e5;transform:scale(1.05)}
+.secondary-controls{display:flex;align-items:center;justify-content:center;gap:24px;margin-bottom:16px}
+.secondary-controls button{background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:6px}
+.secondary-controls button:hover{color:#e2e8f0}
+.secondary-controls button.active{color:#6366f1}
+.playlist{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:200px}
+.playlist-header{padding:12px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.playlist-header h4{margin:0;font-size:13px}
+.playlist-actions{display:flex;gap:6px}
+.playlist-actions button{background:#334155;border:none;color:#94a3b8;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer}
+.playlist-actions button:hover{background:#475569;color:#fff}
+.playlist-list{flex:1;overflow-y:auto}
+.playlist-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(51,65,85,.5)}
+.playlist-item:hover{background:#334155}
+.playlist-item.playing{background:rgba(99,102,241,.2)}
+.playlist-item .number{width:24px;text-align:center;color:#64748b;font-size:12px}
+.playlist-item.playing .number{color:#6366f1}
+.playlist-item .name{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.playlist-item .duration{color:#64748b;font-size:12px}
+.playlist-item .remove{background:transparent;border:none;color:#64748b;cursor:pointer;padding:4px;font-size:14px;opacity:0}
+.playlist-item:hover .remove{opacity:1}
+.playlist-item .remove:hover{color:#ef4444}
+.members{background:#1e293b;border-radius:10px;border:1px solid #334155;margin-top:12px;max-height:150px;overflow-y:auto}
+.members-header{padding:10px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.member-item{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:12px}
+.member-item .dot{width:8px;height:8px;background:#10b981;border-radius:50%}
+.member-item .host-badge{background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px;font-size:10px;margin-left:auto}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.show{display:flex}
+.modal{background:#1e293b;border-radius:12px;border:1px solid #334155;width:400px;max-height:70vh;display:flex;flex-direction:column}
+.modal-header{padding:14px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{margin:0;font-size:15px}
+.modal-header .close-btn{background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer}
+.modal-body{padding:16px;flex:1;overflow-y:auto}
+.modal-footer{padding:14px 16px;border-top:1px solid #334155;display:flex;justify-content:flex-end;gap:8px}
+.s3-file{display:flex;align-items:center;gap:10px;padding:10px;border-radius:6px;cursor:pointer}
+.s3-file:hover{background:#334155}
+.s3-file.selected{background:rgba(99,102,241,.2);border:1px solid #6366f1}
+.s3-file .icon{font-size:20px}
+.s3-file .name{flex:1;font-size:13px}
+.upload-area{border:2px dashed #334155;border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px}
+.upload-area:hover{border-color:#6366f1;background:rgba(99,102,241,.1)}
+.upload-area .icon{font-size:32px;margin-bottom:8px;opacity:0.5}
+.upload-area .text{font-size:13px;color:#94a3b8}
+.list-view{display:none}
+.list-view.show{display:block}
+</style>
+</head><body>
+<div class="music-container">
+    <div class="list-view show" id="list-view">
+        <div class="room-create">
+            <h3>&#127925; Create Music Room</h3>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="new-room-title" placeholder="Room name..." style="flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:13px">
+                <button class="btn btn-success" onclick="createRoom()">Create</button>
+            </div>
+        </div>
+        <div class="room-join">
+            <input type="text" id="join-code" placeholder="Enter code..." maxlength="6">
+            <button class="btn btn-primary" onclick="joinByCode()">Join</button>
+        </div>
+        <h3 style="font-size:14px;margin-bottom:12px">Active Rooms</h3>
+        <div class="room-list" id="room-list"></div>
+    </div>
+
+    <div class="player-view" id="player-view">
+        <div class="player-header">
+            <button class="btn btn-secondary btn-sm" onclick="leaveRoom()">&#9664; Leave</button>
+            <div class="room-info">
+                <span class="room-title" id="room-title">Music Room</span>
+                <span class="room-code" id="room-code" onclick="copyCode()" title="Click to copy">ABC123</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="showInvite()">&#128101; Invite</button>
+        </div>
+
+        <div class="now-playing">
+            <div class="icon" id="playing-icon">&#127925;</div>
+            <div class="track-name" id="track-name">No track playing</div>
+            <div class="track-info" id="track-info">Add songs to playlist</div>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar" id="progress-bar" onclick="seekTo(event)">
+                <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+            </div>
+            <div class="time-display">
+                <span id="current-time">0:00</span>
+                <span id="total-time">0:00</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="prevTrack()" title="Previous">&#9198;</button>
+            <button class="play-btn" id="play-btn" onclick="togglePlay()">&#9658;</button>
+            <button onclick="nextTrack()" title="Next">&#9197;</button>
+        </div>
+
+        <div class="secondary-controls">
+            <button id="shuffle-btn" onclick="toggleShuffle()" title="Shuffle">&#128256;</button>
+            <button id="repeat-btn" onclick="toggleRepeat()" title="Repeat">&#128257;</button>
+        </div>
+
+        <div class="playlist">
+            <div class="playlist-header">
+                <h4>&#127926; Playlist</h4>
+                <div class="playlist-actions">
+                    <button onclick="showAddTrack()">+ Add</button>
+                    <button onclick="showImportS3()">Import S3</button>
+                </div>
+            </div>
+            <div class="playlist-list" id="playlist"></div>
+        </div>
+
+        <div class="members">
+            <div class="members-header"><span id="member-count">Members (0)</span></div>
+            <div id="members-list"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#127925; Add Track</h3>
+            <button class="close-btn" onclick="hideAddModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="upload-area" onclick="document.getElementById('file-input').click()">
+                <div class="icon">&#128190;</div>
+                <div class="text">Click to upload audio file<br><small>MP3, WAV, OGG, FLAC</small></div>
+            </div>
+            <input type="file" id="file-input" accept="audio/*" style="display:none" onchange="uploadTrack()">
+            <div id="upload-progress" style="display:none;margin-top:12px">
+                <div style="font-size:12px;margin-bottom:6px">Uploading...</div>
+                <div style="height:4px;background:#334155;border-radius:2px"><div id="upload-bar" style="height:100%;background:#6366f1;border-radius:2px;width:0%;transition:width .3s"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="s3-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#9729; Import from S3</h3>
+            <button class="close-btn" onclick="hideS3Modal()">&times;</button>
+        </div>
+        <div class="modal-body" id="s3-files"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideS3Modal()">Cancel</button>
+            <button class="btn btn-primary" onclick="importSelected()">Import</button>
+        </div>
+    </div>
+</div>
+
+<audio id="audio" style="display:none"></audio>
+
+<script>
+var socket=io();
+var currentUser='{{ username }}';
+var currentRoom=null;
+var roomState={playlist:[],current_track:0,current_time:0,is_playing:false,shuffle:false,repeat:'none',control_mode:'host_only',host_user:'',members:[]};
+var audio=document.getElementById('audio');
+var isHost=false;
+var canControl=false;
+var selectedS3Files=[];
+var syncInterval=null;
+
+function init(){
+    loadRooms();
+    setupSocket();
+    setupAudio();
+}
+
+function loadRooms(){
+    fetch('/api/music/rooms').then(r=>r.json()).then(d=>{
+        var list=document.getElementById('room-list');
+        if(!d.rooms||!d.rooms.length){
+            list.innerHTML='<div style="text-align:center;padding:30px;color:#64748b">No active rooms</div>';
+            return;
+        }
+        var html='';
+        d.rooms.forEach(r=>{
+            html+='<div class="room-item" onclick="joinRoom(\\''+r._id+'\\')">';
+            html+='<div class="title">'+escapeHtml(r.title)+'</div>';
+            html+='<div class="info"><span>&#128101; '+r.member_count+'</span><span>Host: '+r.host_user+'</span></div>';
+            html+='</div>';
+        });
+        list.innerHTML=html;
+    });
+}
+
+function createRoom(){
+    var title=document.getElementById('new-room-title').value.trim()||'Music Room';
+    socket.emit('create_music_room',{title:title,control_mode:'everyone'});
+}
+
+function joinByCode(){
+    var code=document.getElementById('join-code').value.trim().toUpperCase();
+    if(code.length!==6){alert('Invalid code');return;}
+    socket.emit('join_music_room',{code:code});
+}
+
+function joinRoom(roomId){
+    socket.emit('join_music_room',{room_id:roomId});
+}
+
+function leaveRoom(){
+    if(currentRoom)socket.emit('leave_music_room',{room_id:currentRoom});
+    currentRoom=null;
+    showListView();
+}
+
+function showListView(){
+    document.getElementById('list-view').classList.add('show');
+    document.getElementById('player-view').classList.remove('show');
+    if(syncInterval){clearInterval(syncInterval);syncInterval=null;}
+    loadRooms();
+}
+
+function showPlayerView(){
+    document.getElementById('list-view').classList.remove('show');
+    document.getElementById('player-view').classList.add('show');
+}
+
+function updateRoomUI(){
+    document.getElementById('room-title').textContent=roomState.title||'Music Room';
+    document.getElementById('room-code').textContent=roomState.code||'------';
+    isHost=roomState.host_user===currentUser;
+    canControl=isHost||roomState.control_mode==='everyone';
+    updatePlaylist();
+    updateMembers();
+    updateNowPlaying();
+    updateControls();
+}
+
+function updatePlaylist(){
+    var list=document.getElementById('playlist');
+    if(!roomState.playlist.length){
+        list.innerHTML='<div style="text-align:center;padding:20px;color:#64748b;font-size:12px">Playlist is empty</div>';
+        return;
+    }
+    var html='';
+    roomState.playlist.forEach((t,i)=>{
+        var playing=i===roomState.current_track&&roomState.is_playing;
+        html+='<div class="playlist-item'+(playing?' playing':'')+'" onclick="playTrack('+i+')">';
+        html+='<span class="number">'+(playing?'&#9658;':(i+1))+'</span>';
+        html+='<span class="name">'+escapeHtml(t.name)+'</span>';
+        html+='<span class="duration">'+formatTime(t.duration||0)+'</span>';
+        if(canControl)html+='<button class="remove" onclick="event.stopPropagation();removeTrack('+i+')">&times;</button>';
+        html+='</div>';
+    });
+    list.innerHTML=html;
+}
+
+function updateMembers(){
+    document.getElementById('member-count').textContent='Members ('+roomState.members.length+')';
+    var list=document.getElementById('members-list');
+    var html='';
+    roomState.members.forEach(m=>{
+        html+='<div class="member-item"><span class="dot"></span><span>'+m+'</span>';
+        if(m===roomState.host_user)html+='<span class="host-badge">Host</span>';
+        html+='</div>';
+    });
+    list.innerHTML=html;
+}
+
+function updateNowPlaying(){
+    var track=roomState.playlist[roomState.current_track];
+    if(track){
+        document.getElementById('playing-icon').innerHTML='&#127926;';
+        document.getElementById('track-name').textContent=track.name;
+        document.getElementById('track-info').textContent='Track '+(roomState.current_track+1)+' of '+roomState.playlist.length;
+        document.getElementById('total-time').textContent=formatTime(track.duration||0);
+    }else{
+        document.getElementById('playing-icon').innerHTML='&#127925;';
+        document.getElementById('track-name').textContent='No track playing';
+        document.getElementById('track-info').textContent='Add songs to playlist';
+        document.getElementById('total-time').textContent='0:00';
+    }
+}
+
+function updateControls(){
+    document.getElementById('play-btn').innerHTML=roomState.is_playing?'&#10074;&#10074;':'&#9658;';
+    document.getElementById('shuffle-btn').classList.toggle('active',roomState.shuffle);
+    document.getElementById('repeat-btn').classList.toggle('active',roomState.repeat!=='none');
+}
+
+function togglePlay(){
+    if(!canControl)return;
+    if(roomState.is_playing){
+        socket.emit('music_pause',{room_id:currentRoom});
+    }else{
+        socket.emit('music_play',{room_id:currentRoom});
+    }
+}
+
+function playTrack(index){
+    if(!canControl)return;
+    socket.emit('music_play',{room_id:currentRoom,track_index:index});
+}
+
+function prevTrack(){
+    if(!canControl)return;
+    socket.emit('music_prev',{room_id:currentRoom});
+}
+
+function nextTrack(){
+    if(!canControl)return;
+    socket.emit('music_next',{room_id:currentRoom});
+}
+
+function toggleShuffle(){
+    if(!canControl)return;
+    socket.emit('music_shuffle',{room_id:currentRoom,enabled:!roomState.shuffle});
+}
+
+function toggleRepeat(){
+    if(!canControl)return;
+    var modes=['none','one','all'];
+    var next=modes[(modes.indexOf(roomState.repeat)+1)%3];
+    socket.emit('music_repeat',{room_id:currentRoom,mode:next});
+}
+
+function seekTo(e){
+    if(!canControl)return;
+    var bar=document.getElementById('progress-bar');
+    var rect=bar.getBoundingClientRect();
+    var pct=(e.clientX-rect.left)/rect.width;
+    var track=roomState.playlist[roomState.current_track];
+    if(track){
+        var time=pct*(track.duration||0);
+        socket.emit('music_seek',{room_id:currentRoom,time:time});
+    }
+}
+
+function removeTrack(index){
+    if(!canControl)return;
+    var track=roomState.playlist[index];
+    if(track)socket.emit('remove_track',{room_id:currentRoom,track_id:track.id});
+}
+
+function copyCode(){
+    navigator.clipboard.writeText(roomState.code||'').then(()=>alert('Code copied!'));
+}
+
+function showAddTrack(){document.getElementById('add-modal').classList.add('show');}
+function hideAddModal(){document.getElementById('add-modal').classList.remove('show');}
+
+function uploadTrack(){
+    var input=document.getElementById('file-input');
+    var file=input.files[0];
+    if(!file)return;
+    var form=new FormData();
+    form.append('file',file);
+    form.append('room_id',currentRoom);
+    document.getElementById('upload-progress').style.display='block';
+    var xhr=new XMLHttpRequest();
+    xhr.upload.onprogress=function(e){
+        if(e.lengthComputable){
+            var pct=Math.round(e.loaded/e.total*100);
+            document.getElementById('upload-bar').style.width=pct+'%';
+        }
+    };
+    xhr.onload=function(){
+        document.getElementById('upload-progress').style.display='none';
+        document.getElementById('upload-bar').style.width='0%';
+        input.value='';
+        if(xhr.status===200){
+            var d=JSON.parse(xhr.responseText);
+            if(d.track)socket.emit('add_track',{room_id:currentRoom,track:d.track});
+            hideAddModal();
+        }else{
+            alert('Upload failed');
+        }
+    };
+    xhr.open('POST','/api/music/upload');
+    xhr.send(form);
+}
+
+function showImportS3(){
+    selectedS3Files=[];
+    document.getElementById('s3-files').innerHTML='<div style="text-align:center;padding:20px;color:#64748b">Loading...</div>';
+    document.getElementById('s3-modal').classList.add('show');
+    fetch('/api/music/s3-audio').then(r=>r.json()).then(d=>{
+        if(!d.files||!d.files.length){
+            document.getElementById('s3-files').innerHTML='<div style="text-align:center;padding:20px;color:#64748b">No audio files found</div>';
+            return;
+        }
+        var html='';
+        d.files.forEach(f=>{
+            html+='<div class="s3-file" data-key="'+f.s3_key+'" data-name="'+escapeHtml(f.name)+'" onclick="toggleS3File(this)">';
+            html+='<span class="icon">&#127925;</span>';
+            html+='<span class="name">'+escapeHtml(f.name)+'</span>';
+            html+='</div>';
+        });
+        document.getElementById('s3-files').innerHTML=html;
+    });
+}
+
+function hideS3Modal(){document.getElementById('s3-modal').classList.remove('show');}
+
+function toggleS3File(el){
+    el.classList.toggle('selected');
+    var key=el.dataset.key;
+    var name=el.dataset.name;
+    var idx=selectedS3Files.findIndex(f=>f.s3_key===key);
+    if(idx>=0)selectedS3Files.splice(idx,1);
+    else selectedS3Files.push({s3_key:key,name:name});
+}
+
+function importSelected(){
+    if(!selectedS3Files.length){alert('Select files first');return;}
+    selectedS3Files.forEach(f=>{
+        socket.emit('import_from_s3',{room_id:currentRoom,s3_key:f.s3_key,name:f.name});
+    });
+    hideS3Modal();
+}
+
+function showInvite(){
+    var code=roomState.code||'';
+    prompt('Share this code to invite others:',code);
+}
+
+function setupAudio(){
+    audio.onended=function(){
+        if(isHost)socket.emit('music_next',{room_id:currentRoom});
+    };
+    audio.ontimeupdate=function(){
+        if(!roomState.playlist.length)return;
+        var track=roomState.playlist[roomState.current_track];
+        var duration=track?track.duration:0;
+        var current=audio.currentTime;
+        document.getElementById('current-time').textContent=formatTime(current);
+        if(duration>0){
+            document.getElementById('progress-fill').style.width=(current/duration*100)+'%';
+        }
+    };
+}
+
+function loadAndPlayTrack(){
+    var track=roomState.playlist[roomState.current_track];
+    if(!track)return;
+    audio.src='/api/music/stream/'+encodeURIComponent(track.s3_key);
+    audio.currentTime=roomState.current_time||0;
+    if(roomState.is_playing){
+        audio.play().catch(e=>console.log('Autoplay blocked'));
+    }
+}
+
+function setupSocket(){
+    socket.on('music_room_created',function(data){
+        currentRoom=data.room_id;
+        roomState=data.state;
+        showPlayerView();
+        updateRoomUI();
+    });
+    socket.on('music_room_joined',function(data){
+        currentRoom=data.room_id;
+        roomState=data.state;
+        showPlayerView();
+        updateRoomUI();
+        loadAndPlayTrack();
+    });
+    socket.on('music_room_error',function(data){
+        alert(data.error||'Error');
+    });
+    socket.on('music_state',function(data){
+        if(data.room_id!==currentRoom)return;
+        var wasPlaying=roomState.is_playing;
+        var oldTrack=roomState.current_track;
+        roomState=data.state;
+        updateRoomUI();
+        if(roomState.current_track!==oldTrack){
+            loadAndPlayTrack();
+        }else if(roomState.is_playing!==wasPlaying){
+            if(roomState.is_playing)audio.play().catch(e=>{});
+            else audio.pause();
+        }
+    });
+    socket.on('music_time_sync',function(data){
+        if(data.room_id!==currentRoom||isHost)return;
+        var diff=Math.abs(audio.currentTime-data.time);
+        if(diff>2)audio.currentTime=data.time;
+    });
+    socket.on('music_room_left',function(){
+        showListView();
+    });
+}
+
+function formatTime(s){
+    if(!s||isNaN(s))return'0:00';
+    var m=Math.floor(s/60);
+    var sec=Math.floor(s%60);
+    return m+':'+(sec<10?'0':'')+sec;
+}
+
+function escapeHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';}
+
+init();
+</script></body></html>"""
+
+# ===========================================
+# EMBED_SCREEN_SHARE - WebRTC Screen Sharing
+# ===========================================
+
+EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Share</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+.screen-container{max-width:1000px;margin:0 auto;padding:12px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column}
+.list-view,.host-view,.viewer-view{display:none;flex-direction:column;flex:1;min-height:0}
+.list-view.show,.host-view.show,.viewer-view.show{display:flex}
+.session-list{flex:1;overflow-y:auto}
+.session-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
+.session-item:hover{border-color:#6366f1}
+.session-item .title{font-size:15px;font-weight:600;margin-bottom:4px}
+.session-item .info{font-size:12px;color:#94a3b8;display:flex;gap:12px}
+.session-item .lock{color:#f59e0b}
+.start-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:20px;margin-bottom:16px}
+.start-section h3{margin:0 0 16px 0;font-size:15px}
+.form-row{display:flex;gap:12px;margin-bottom:12px}
+.form-row input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:13px}
+.form-row input:focus{outline:none;border-color:#6366f1}
+.host-header,.viewer-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #334155}
+.host-header .title,.viewer-header .title{font-size:16px;font-weight:600}
+.video-container{flex:1;background:#000;border-radius:10px;overflow:hidden;position:relative;margin:12px 0;min-height:300px}
+.video-container video{width:100%;height:100%;object-fit:contain}
+.video-placeholder{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#64748b}
+.video-placeholder .icon{font-size:60px;margin-bottom:12px;opacity:0.3}
+.controls-bar{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;background:#1e293b;border-radius:10px}
+.controls-bar button{background:#334155;border:none;color:#e2e8f0;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px}
+.controls-bar button:hover{background:#475569}
+.controls-bar button.active{background:#6366f1}
+.controls-bar button.danger{background:#ef4444}
+.controls-bar button.danger:hover{background:#dc2626}
+.sidebar{width:280px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;max-height:400px}
+.sidebar-header{padding:12px;border-bottom:1px solid #334155;font-size:13px;font-weight:600}
+.viewer-list{padding:8px;overflow-y:auto;flex:1}
+.viewer-item{display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:13px}
+.viewer-item .dot{width:8px;height:8px;background:#10b981;border-radius:50%}
+.chat-section{flex:1;display:flex;flex-direction:column;min-height:0}
+.chat-messages{flex:1;overflow-y:auto;padding:8px}
+.chat-msg{padding:6px 10px;margin-bottom:6px;font-size:12px}
+.chat-msg .user{font-weight:600;color:#6366f1}
+.chat-msg .text{color:#e2e8f0}
+.chat-input{display:flex;gap:6px;padding:8px}
+.chat-input input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px;color:#e2e8f0;font-size:12px}
+.chat-input input:focus{outline:none;border-color:#6366f1}
+.share-link{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;margin:12px 0;display:flex;align-items:center;gap:8px}
+.share-link input{flex:1;background:transparent;border:none;color:#e2e8f0;font-size:12px}
+.share-link button{background:#6366f1;border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+.host-sidebar{display:flex;flex-direction:column;gap:12px}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.show{display:flex}
+.modal{background:#1e293b;border-radius:12px;border:1px solid #334155;width:360px}
+.modal-header{padding:14px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{margin:0;font-size:15px}
+.modal-header .close-btn{background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer}
+.modal-body{padding:16px}
+.modal-footer{padding:14px 16px;border-top:1px solid #334155;display:flex;justify-content:flex-end;gap:8px}
+.main-content{display:flex;gap:12px;flex:1;min-height:0}
+.video-section{flex:1;display:flex;flex-direction:column;min-height:0}
+</style>
+</head><body>
+<div class="screen-container">
+    <div class="list-view show" id="list-view">
+        <div class="start-section">
+            <h3>&#128250; Start Screen Share</h3>
+            <div class="form-row">
+                <input type="text" id="session-title" placeholder="Session title...">
+                <input type="password" id="session-password" placeholder="Password (optional)">
+            </div>
+            <button class="btn btn-success" onclick="startShare()">&#128250; Start Sharing</button>
+        </div>
+        <h3 style="font-size:14px;margin-bottom:12px">Active Sessions</h3>
+        <div class="session-list" id="session-list"></div>
+    </div>
+
+    <div class="host-view" id="host-view">
+        <div class="host-header">
+            <span class="title" id="host-title">Screen Share</span>
+            <button class="btn btn-danger btn-sm" onclick="stopShare()">Stop Sharing</button>
+        </div>
+        <div class="share-link">
+            <input type="text" id="share-link" readonly>
+            <button onclick="copyLink()">Copy</button>
+        </div>
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="host-preview" autoplay muted playsinline></video>
+                </div>
+                <div class="controls-bar">
+                    <button id="mic-btn" onclick="toggleMic()">&#127908; Mic Off</button>
+                    <button id="cam-btn" onclick="toggleCam()">&#128247; Cam Off</button>
+                </div>
+            </div>
+            <div class="host-sidebar">
+                <div class="sidebar">
+                    <div class="sidebar-header">&#128101; Viewers (<span id="viewer-count">0</span>)</div>
+                    <div class="viewer-list" id="viewer-list"></div>
+                </div>
+                <div class="sidebar" style="flex:1;min-height:150px">
+                    <div class="sidebar-header">&#128172; Chat</div>
+                    <div class="chat-section">
+                        <div class="chat-messages" id="host-chat"></div>
+                        <div class="chat-input">
+                            <input type="text" id="host-chat-input" placeholder="Type message..." onkeydown="if(event.key==='Enter')sendChat('host')">
+                            <button class="btn btn-primary btn-sm" onclick="sendChat('host')">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="viewer-view" id="viewer-view">
+        <div class="viewer-header">
+            <span class="title" id="viewer-title">Watching: Screen Share</span>
+            <button class="btn btn-secondary btn-sm" onclick="leaveSession()">Leave</button>
+        </div>
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="viewer-video" autoplay playsinline></video>
+                    <div class="video-placeholder" id="viewer-placeholder">
+                        <div class="icon">&#128250;</div>
+                        <div>Connecting to stream...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar" style="flex:1;min-height:200px">
+                <div class="sidebar-header">&#128172; Chat</div>
+                <div class="chat-section">
+                    <div class="chat-messages" id="viewer-chat"></div>
+                    <div class="chat-input">
+                        <input type="text" id="viewer-chat-input" placeholder="Type message..." onkeydown="if(event.key==='Enter')sendChat('viewer')">
+                        <button class="btn btn-primary btn-sm" onclick="sendChat('viewer')">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="password-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#128274; Password Required</h3>
+            <button class="close-btn" onclick="hidePasswordModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="password" id="join-password" placeholder="Enter password..." style="width:100%;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hidePasswordModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitPassword()">Join</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var socket=io();
+var currentUser='{{ username }}';
+var currentSession=null;
+var isHost=false;
+var localStream=null;
+var peerConnections={};
+var pendingJoinSession=null;
+
+var iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+
+function init(){
+    loadSessions();
+    setupSocket();
+}
+
+function loadSessions(){
+    fetch('/api/screen/sessions').then(r=>r.json()).then(d=>{
+        var list=document.getElementById('session-list');
+        if(!d.sessions||!d.sessions.length){
+            list.innerHTML='<div style="text-align:center;padding:30px;color:#64748b">No active sessions</div>';
+            return;
+        }
+        var html='';
+        d.sessions.forEach(s=>{
+            html+='<div class="session-item" onclick="joinSession(\\''+s._id+'\\','+s.has_password+')">';
+            html+='<div class="title">'+escapeHtml(s.title)+(s.has_password?' <span class="lock">&#128274;</span>':'')+'</div>';
+            html+='<div class="info"><span>Host: '+s.host_user+'</span><span>&#128101; '+s.viewer_count+'</span></div>';
+            html+='</div>';
+        });
+        list.innerHTML=html;
+    });
+}
+
+async function startShare(){
+    var title=document.getElementById('session-title').value.trim()||'Screen Share';
+    var password=document.getElementById('session-password').value;
+    try{
+        localStream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        document.getElementById('host-preview').srcObject=localStream;
+        localStream.getVideoTracks()[0].onended=function(){stopShare();};
+        socket.emit('start_screen_share',{title:title,password:password});
+    }catch(e){
+        alert('Could not start screen share: '+e.message);
+    }
+}
+
+function stopShare(){
+    if(localStream){
+        localStream.getTracks().forEach(t=>t.stop());
+        localStream=null;
+    }
+    Object.values(peerConnections).forEach(pc=>pc.close());
+    peerConnections={};
+    if(currentSession)socket.emit('stop_screen_share',{session_id:currentSession});
+    currentSession=null;
+    isHost=false;
+    showListView();
+}
+
+function joinSession(sessionId,hasPassword){
+    pendingJoinSession=sessionId;
+    if(hasPassword){
+        document.getElementById('password-modal').classList.add('show');
+    }else{
+        socket.emit('join_screen_session',{session_id:sessionId});
+    }
+}
+
+function submitPassword(){
+    var password=document.getElementById('join-password').value;
+    hidePasswordModal();
+    socket.emit('join_screen_session',{session_id:pendingJoinSession,password:password});
+}
+
+function hidePasswordModal(){
+    document.getElementById('password-modal').classList.remove('show');
+    document.getElementById('join-password').value='';
+}
+
+function leaveSession(){
+    if(currentSession)socket.emit('leave_screen_session',{session_id:currentSession});
+    Object.values(peerConnections).forEach(pc=>pc.close());
+    peerConnections={};
+    currentSession=null;
+    showListView();
+}
+
+function showListView(){
+    document.getElementById('list-view').classList.add('show');
+    document.getElementById('host-view').classList.remove('show');
+    document.getElementById('viewer-view').classList.remove('show');
+    loadSessions();
+}
+
+function showHostView(){
+    document.getElementById('list-view').classList.remove('show');
+    document.getElementById('host-view').classList.add('show');
+    document.getElementById('viewer-view').classList.remove('show');
+}
+
+function showViewerView(){
+    document.getElementById('list-view').classList.remove('show');
+    document.getElementById('host-view').classList.remove('show');
+    document.getElementById('viewer-view').classList.add('show');
+}
+
+function copyLink(){
+    var input=document.getElementById('share-link');
+    navigator.clipboard.writeText(input.value).then(()=>alert('Link copied!'));
+}
+
+function toggleMic(){
+    // Placeholder - would toggle mic track
+    var btn=document.getElementById('mic-btn');
+    btn.classList.toggle('active');
+}
+
+function toggleCam(){
+    // Placeholder - would toggle cam track
+    var btn=document.getElementById('cam-btn');
+    btn.classList.toggle('active');
+}
+
+function sendChat(role){
+    var inputId=role==='host'?'host-chat-input':'viewer-chat-input';
+    var input=document.getElementById(inputId);
+    var text=input.value.trim();
+    if(!text||!currentSession)return;
+    socket.emit('screen_chat',{session_id:currentSession,content:text});
+    input.value='';
+}
+
+function addChatMessage(user,text,role){
+    var chatId=role==='host'?'host-chat':'viewer-chat';
+    var chat=document.getElementById(chatId);
+    var div=document.createElement('div');
+    div.className='chat-msg';
+    div.innerHTML='<span class="user">'+escapeHtml(user)+':</span> <span class="text">'+escapeHtml(text)+'</span>';
+    chat.appendChild(div);
+    chat.scrollTop=chat.scrollHeight;
+}
+
+async function createPeerConnection(viewerId){
+    var pc=new RTCPeerConnection({iceServers:iceServers});
+    peerConnections[viewerId]=pc;
+    if(localStream){
+        localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+    }
+    pc.onicecandidate=function(e){
+        if(e.candidate){
+            socket.emit('webrtc_ice',{session_id:currentSession,viewer_id:viewerId,candidate:e.candidate});
+        }
+    };
+    var offer=await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc_offer',{session_id:currentSession,viewer_id:viewerId,sdp:pc.localDescription});
+}
+
+async function handleOffer(hostId,sdp){
+    var pc=new RTCPeerConnection({iceServers:iceServers});
+    peerConnections[hostId]=pc;
+    pc.onicecandidate=function(e){
+        if(e.candidate){
+            socket.emit('webrtc_ice',{session_id:currentSession,candidate:e.candidate});
+        }
+    };
+    pc.ontrack=function(e){
+        document.getElementById('viewer-video').srcObject=e.streams[0];
+        document.getElementById('viewer-placeholder').style.display='none';
+    };
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    var answer=await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc_answer',{session_id:currentSession,sdp:pc.localDescription});
+}
+
+function setupSocket(){
+    socket.on('screen_session_started',function(data){
+        currentSession=data.session_id;
+        isHost=true;
+        document.getElementById('host-title').textContent=data.title;
+        document.getElementById('share-link').value=location.origin+'/screen/'+data.session_id;
+        showHostView();
+    });
+    socket.on('screen_session_joined',function(data){
+        currentSession=data.session_id;
+        isHost=false;
+        document.getElementById('viewer-title').textContent='Watching: '+data.title;
+        showViewerView();
+    });
+    socket.on('screen_session_error',function(data){
+        alert(data.error||'Error');
+    });
+    socket.on('viewer_joined',function(data){
+        if(!isHost)return;
+        createPeerConnection(data.viewer_id);
+        updateViewerList(data.viewers);
+    });
+    socket.on('viewer_left',function(data){
+        if(peerConnections[data.viewer_id]){
+            peerConnections[data.viewer_id].close();
+            delete peerConnections[data.viewer_id];
+        }
+        updateViewerList(data.viewers);
+    });
+    socket.on('webrtc_offer',function(data){
+        if(isHost)return;
+        handleOffer(data.host_id,data.sdp);
+    });
+    socket.on('webrtc_answer',async function(data){
+        if(!isHost)return;
+        var pc=peerConnections[data.viewer_id];
+        if(pc)await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    });
+    socket.on('webrtc_ice',async function(data){
+        var pc=peerConnections[data.from_id]||peerConnections[Object.keys(peerConnections)[0]];
+        if(pc&&data.candidate){
+            try{await pc.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){}
+        }
+    });
+    socket.on('screen_chat_message',function(data){
+        addChatMessage(data.from_user,data.content,isHost?'host':'viewer');
+    });
+    socket.on('screen_session_ended',function(){
+        alert('Host ended the session');
+        leaveSession();
+    });
+}
+
+function updateViewerList(viewers){
+    document.getElementById('viewer-count').textContent=viewers.length;
+    var list=document.getElementById('viewer-list');
+    var html='';
+    viewers.forEach(v=>{
+        html+='<div class="viewer-item"><span class="dot"></span><span>'+escapeHtml(v)+'</span></div>';
+    });
+    list.innerHTML=html||'<div style="padding:10px;color:#64748b;font-size:12px">No viewers yet</div>';
+}
+
+function escapeHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';}
+
+init();
+</script></body></html>"""
+
+# ===========================================
 # EMBED_USER_SHARES - Incoming shares from other users
 # ===========================================
 
@@ -4130,6 +5470,27 @@ def embed_chat():
         return redirect('/')
     username = session['user']
     return render_template_string(EMBED_CHAT, username=username)
+
+@app.route('/embed/screen-share')
+def embed_screen_share():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    username = session['user']
+    return render_template_string(EMBED_SCREEN_SHARE, username=username)
+
+@app.route('/embed/music-room')
+def embed_music_room():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    username = session['user']
+    return render_template_string(EMBED_MUSIC_ROOM, username=username)
+
+@app.route('/embed/todo')
+def embed_todo():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    username = session['user']
+    return render_template_string(EMBED_TODO, username=username)
 
 
 # ===========================================
@@ -7046,6 +8407,1410 @@ def api_chat_message_recall():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ===========================================
+# Todo/Notes API Endpoints
+# ===========================================
+
+def _init_todos_collection(db):
+    """Ensure indexes on todos collection"""
+    col = db.todos
+    col.create_index('creator')
+    col.create_index('assignee')
+    col.create_index([('creator', 1), ('assignee', 1)])
+    col.create_index('created_at')
+    return col
+
+@app.route('/api/todos', methods=['GET'])
+def api_todos_list():
+    """List tasks based on tab filter"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    tab = request.args.get('tab', 'my')
+    status = request.args.get('status', '')
+    priority = request.args.get('priority', '')
+
+    try:
+        db = get_db()
+        _init_todos_collection(db)
+
+        # Build query based on tab
+        if tab == 'my':
+            # My own tasks (assignee is empty or self)
+            query = {'creator': username, '$or': [{'assignee': ''}, {'assignee': None}, {'assignee': username}]}
+        elif tab == 'assigned':
+            # Tasks assigned to me by others
+            query = {'$or': [
+                {'assignee': username, 'creator': {'$ne': username}},
+                {'assignee': '__all__'}
+            ]}
+        elif tab == 'created':
+            # Tasks I created and assigned to others
+            query = {'creator': username, 'assignee': {'$nin': ['', None, username]}}
+        else:
+            query = {'$or': [{'creator': username}, {'assignee': username}, {'assignee': '__all__'}]}
+
+        # Apply filters
+        if status:
+            query['status'] = status
+        if priority:
+            query['priority'] = priority
+
+        tasks = list(db.todos.find(query).sort('created_at', -1).limit(100))
+
+        # Convert ObjectId to string
+        for t in tasks:
+            t['_id'] = str(t['_id'])
+            for key in ['created_at', 'updated_at', 'completed_at', 'due_date']:
+                if t.get(key) and hasattr(t[key], 'isoformat'):
+                    t[key] = t[key].isoformat()
+            # Convert comment dates
+            for c in t.get('comments', []):
+                if c.get('created_at') and hasattr(c['created_at'], 'isoformat'):
+                    c['created_at'] = c['created_at'].isoformat()
+
+        # Get counts for each tab
+        counts = {
+            'my': db.todos.count_documents({'creator': username, '$or': [{'assignee': ''}, {'assignee': None}, {'assignee': username}]}),
+            'assigned': db.todos.count_documents({'$or': [{'assignee': username, 'creator': {'$ne': username}}, {'assignee': '__all__'}]}),
+            'created': db.todos.count_documents({'creator': username, 'assignee': {'$nin': ['', None, username]}})
+        }
+
+        return jsonify({'tasks': tasks, 'counts': counts})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos', methods=['POST'])
+def api_todos_create():
+    """Create a new task"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    data = request.json
+
+    try:
+        db = get_db()
+        _init_todos_collection(db)
+
+        task_id = str(uuid.uuid4())[:12]
+        task = {
+            '_id': task_id,
+            'creator': username,
+            'assignee': data.get('assignee', '') or '',
+            'title': data.get('title', '').strip(),
+            'description': data.get('description', '').strip(),
+            'priority': data.get('priority', 'medium'),
+            'status': data.get('status', 'pending'),
+            'due_date': datetime.fromisoformat(data['due_date']) if data.get('due_date') else None,
+            'comments': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+
+        if not task['title']:
+            return jsonify({'error': 'Title is required'}), 400
+
+        db.todos.insert_one(task)
+
+        # Notify assignee if assigned to someone else
+        assignee = task['assignee']
+        if assignee and assignee not in ['', username]:
+            if assignee == '__all__':
+                # Notify all users
+                socketio.emit('task_assigned', {
+                    'task_id': task_id,
+                    'title': task['title'],
+                    'from_user': username
+                }, broadcast=True)
+            else:
+                socketio.emit('task_assigned', {
+                    'task_id': task_id,
+                    'title': task['title'],
+                    'from_user': username
+                }, room=assignee)
+
+        return jsonify({'success': True, 'task_id': task_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/<task_id>', methods=['GET'])
+def api_todos_get(task_id):
+    """Get single task details"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+        task = db.todos.find_one({'_id': task_id})
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+
+        # Check permission
+        if task['creator'] != username and task.get('assignee') not in [username, '__all__']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        task['_id'] = str(task['_id'])
+        for key in ['created_at', 'updated_at', 'completed_at', 'due_date']:
+            if task.get(key) and hasattr(task[key], 'isoformat'):
+                task[key] = task[key].isoformat()
+        for c in task.get('comments', []):
+            if c.get('created_at') and hasattr(c['created_at'], 'isoformat'):
+                c['created_at'] = c['created_at'].isoformat()
+
+        return jsonify({'task': task})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/<task_id>', methods=['PUT'])
+def api_todos_update(task_id):
+    """Update a task"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    data = request.json
+
+    try:
+        db = get_db()
+        task = db.todos.find_one({'_id': task_id})
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+
+        # Check permission
+        if task['creator'] != username and task.get('assignee') not in [username, '__all__']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        update = {'$set': {'updated_at': datetime.utcnow()}}
+        if 'title' in data:
+            update['$set']['title'] = data['title'].strip()
+        if 'description' in data:
+            update['$set']['description'] = data['description'].strip()
+        if 'priority' in data:
+            update['$set']['priority'] = data['priority']
+        if 'status' in data:
+            update['$set']['status'] = data['status']
+            if data['status'] == 'completed':
+                update['$set']['completed_at'] = datetime.utcnow()
+        if 'assignee' in data:
+            update['$set']['assignee'] = data['assignee']
+        if 'due_date' in data:
+            update['$set']['due_date'] = datetime.fromisoformat(data['due_date']) if data['due_date'] else None
+
+        db.todos.update_one({'_id': task_id}, update)
+
+        # Notify about update
+        if task['creator'] != username:
+            socketio.emit('task_updated', {'task_id': task_id}, room=task['creator'])
+        if task.get('assignee') and task['assignee'] not in ['', username]:
+            if task['assignee'] == '__all__':
+                socketio.emit('task_updated', {'task_id': task_id}, broadcast=True)
+            else:
+                socketio.emit('task_updated', {'task_id': task_id}, room=task['assignee'])
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/<task_id>', methods=['DELETE'])
+def api_todos_delete(task_id):
+    """Delete a task"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+        result = db.todos.delete_one({'_id': task_id, 'creator': username})
+        return jsonify({'success': result.deleted_count > 0})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/<task_id>/status', methods=['PUT'])
+def api_todos_status(task_id):
+    """Update task status only"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    data = request.json
+
+    try:
+        db = get_db()
+        task = db.todos.find_one({'_id': task_id})
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+
+        if task['creator'] != username and task.get('assignee') not in [username, '__all__']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        update = {'$set': {'status': data['status'], 'updated_at': datetime.utcnow()}}
+        if data['status'] == 'completed':
+            update['$set']['completed_at'] = datetime.utcnow()
+
+        db.todos.update_one({'_id': task_id}, update)
+
+        # Notify if completed
+        if data['status'] == 'completed':
+            if task['creator'] != username:
+                socketio.emit('task_completed', {
+                    'task_id': task_id,
+                    'title': task['title'],
+                    'by_user': username
+                }, room=task['creator'])
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/<task_id>/comment', methods=['POST'])
+def api_todos_comment(task_id):
+    """Add a comment to a task"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    data = request.json
+
+    try:
+        db = get_db()
+        task = db.todos.find_one({'_id': task_id})
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+
+        if task['creator'] != username and task.get('assignee') not in [username, '__all__']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        comment = {
+            'user': username,
+            'text': data.get('text', '').strip(),
+            'created_at': datetime.utcnow()
+        }
+
+        db.todos.update_one(
+            {'_id': task_id},
+            {'$push': {'comments': comment}, '$set': {'updated_at': datetime.utcnow()}}
+        )
+
+        # Notify
+        notify_user = task['creator'] if task['creator'] != username else task.get('assignee')
+        if notify_user and notify_user not in ['', username]:
+            if notify_user == '__all__':
+                socketio.emit('comment_added', {
+                    'task_id': task_id,
+                    'task_title': task['title'],
+                    'user': username
+                }, broadcast=True)
+            else:
+                socketio.emit('comment_added', {
+                    'task_id': task_id,
+                    'task_title': task['title'],
+                    'user': username
+                }, room=notify_user)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/todos/users')
+def api_todos_users():
+    """Get list of users for assignment"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        users = get_usernames()
+        return jsonify({'users': users})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ===========================================
+# Music Room API Endpoints
+# ===========================================
+
+# Track active music rooms: room_id -> room_state
+music_rooms = {}
+
+def _init_music_rooms_collection(db):
+    """Ensure indexes on music_rooms collection"""
+    col = db.music_rooms
+    col.create_index('code')
+    col.create_index('host_user')
+    col.create_index('created_at')
+    return col
+
+@app.route('/api/music/rooms')
+def api_music_rooms():
+    """List active music rooms"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        rooms = list(db.music_rooms.find({}).sort('created_at', -1).limit(50))
+        result = []
+        for r in rooms:
+            result.append({
+                '_id': str(r['_id']),
+                'title': r.get('title', 'Music Room'),
+                'code': r.get('code', ''),
+                'host_user': r.get('host_user', ''),
+                'member_count': len(r.get('members', []))
+            })
+        return jsonify({'rooms': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/music/upload', methods=['POST'])
+def api_music_upload():
+    """Upload audio file to music room"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+    room_id = request.form.get('room_id', '')
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        db = get_db()
+        cfg = get_music_s3_config(db)
+        if not cfg:
+            return jsonify({'error': 'Music storage not configured'}), 500
+
+        ok, result = upload_music_file(cfg, room_id, file.filename, file)
+        if not ok:
+            return jsonify({'error': result}), 500
+
+        # Create track info
+        track = {
+            'id': str(uuid.uuid4())[:8],
+            'name': file.filename,
+            's3_key': result,
+            'duration': 0,  # Would need audio processing to get actual duration
+            'uploader': username
+        }
+
+        return jsonify({'success': True, 'track': track})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/music/stream/<path:s3_key>')
+def api_music_stream(s3_key):
+    """Stream audio file from S3"""
+    if 'user' not in session or session.get('is_admin'):
+        return 'Unauthorized', 401
+
+    try:
+        db = get_db()
+        cfg = get_music_s3_config(db)
+        if not cfg:
+            return 'Music storage not configured', 500
+
+        range_header = request.headers.get('Range')
+        result = stream_audio(cfg, s3_key, range_header)
+
+        if not result:
+            return 'File not found', 404
+
+        gen, content_length, content_type, status_code, headers = result
+
+        resp = Response(gen, status=status_code, mimetype=content_type)
+        resp.headers['Content-Length'] = content_length
+        for k, v in headers.items():
+            resp.headers[k] = v
+
+        return resp
+    except Exception as e:
+        app.logger.error(f"Music stream error: {e}")
+        return str(e), 500
+
+@app.route('/api/music/s3-audio')
+def api_music_s3_audio():
+    """List audio files from user's S3 for import"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+        cfg = get_s3_config(db, username)
+        if not cfg:
+            return jsonify({'files': []})
+
+        files = list_audio_files(cfg)
+        return jsonify({'files': files})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ===========================================
+# Music Room Socket.IO Handlers
+# ===========================================
+
+@socketio.on('create_music_room')
+def handle_create_music_room(data):
+    """Create a new music room"""
+    username = session.get('user')
+    if not username:
+        return
+
+    title = data.get('title', 'Music Room')
+    control_mode = data.get('control_mode', 'host_only')
+
+    try:
+        db = get_db()
+        _init_music_rooms_collection(db)
+
+        room_id = str(uuid.uuid4())[:8]
+        code = ''.join(secrets.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(6))
+
+        room = {
+            '_id': room_id,
+            'code': code,
+            'host_user': username,
+            'title': title,
+            'members': [username],
+            'control_mode': control_mode,
+            'playlist': [],
+            'current_track': 0,
+            'current_time': 0,
+            'is_playing': False,
+            'shuffle': False,
+            'repeat': 'none',
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+
+        db.music_rooms.insert_one(room)
+        join_room(f'music_{room_id}')
+
+        emit('music_room_created', {
+            'room_id': room_id,
+            'state': {
+                'title': title,
+                'code': code,
+                'host_user': username,
+                'members': [username],
+                'control_mode': control_mode,
+                'playlist': [],
+                'current_track': 0,
+                'current_time': 0,
+                'is_playing': False,
+                'shuffle': False,
+                'repeat': 'none'
+            }
+        })
+
+    except Exception as e:
+        emit('music_room_error', {'error': str(e)})
+
+@socketio.on('join_music_room')
+def handle_join_music_room(data):
+    """Join a music room by code or ID"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    code = data.get('code', '').upper()
+
+    try:
+        db = get_db()
+
+        if code:
+            room = db.music_rooms.find_one({'code': code})
+        else:
+            room = db.music_rooms.find_one({'_id': room_id})
+
+        if not room:
+            emit('music_room_error', {'error': 'Room not found'})
+            return
+
+        room_id = room['_id']
+
+        # Add member if not already in
+        if username not in room.get('members', []):
+            db.music_rooms.update_one(
+                {'_id': room_id},
+                {'$addToSet': {'members': username}}
+            )
+            room['members'].append(username)
+
+        join_room(f'music_{room_id}')
+
+        state = {
+            'title': room.get('title', 'Music Room'),
+            'code': room.get('code', ''),
+            'host_user': room.get('host_user', ''),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode', 'host_only'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+
+        emit('music_room_joined', {'room_id': room_id, 'state': state})
+
+        # Notify others
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}', include_self=False)
+
+    except Exception as e:
+        emit('music_room_error', {'error': str(e)})
+
+@socketio.on('leave_music_room')
+def handle_leave_music_room(data):
+    """Leave a music room"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+
+        if room:
+            # Remove member
+            db.music_rooms.update_one(
+                {'_id': room_id},
+                {'$pull': {'members': username}}
+            )
+
+            leave_room(f'music_{room_id}')
+
+            # Delete room if host leaves or no members
+            updated_room = db.music_rooms.find_one({'_id': room_id})
+            if not updated_room.get('members') or room.get('host_user') == username:
+                db.music_rooms.delete_one({'_id': room_id})
+                emit('music_room_left', {}, room=f'music_{room_id}')
+            else:
+                # Notify remaining members
+                state = {
+                    'title': updated_room.get('title'),
+                    'code': updated_room.get('code'),
+                    'host_user': updated_room.get('host_user'),
+                    'members': updated_room.get('members', []),
+                    'control_mode': updated_room.get('control_mode'),
+                    'playlist': updated_room.get('playlist', []),
+                    'current_track': updated_room.get('current_track', 0),
+                    'current_time': updated_room.get('current_time', 0),
+                    'is_playing': updated_room.get('is_playing', False),
+                    'shuffle': updated_room.get('shuffle', False),
+                    'repeat': updated_room.get('repeat', 'none')
+                }
+                emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+        emit('music_room_left', {})
+
+    except Exception as e:
+        app.logger.error(f"Music leave error: {e}")
+
+@socketio.on('music_play')
+def handle_music_play(data):
+    """Play or resume music"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    track_index = data.get('track_index')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        # Check permission
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        update = {'$set': {'is_playing': True, 'updated_at': datetime.utcnow()}}
+        if track_index is not None:
+            update['$set']['current_track'] = track_index
+            update['$set']['current_time'] = 0
+
+        db.music_rooms.update_one({'_id': room_id}, update)
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music play error: {e}")
+
+@socketio.on('music_pause')
+def handle_music_pause(data):
+    """Pause music"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'is_playing': False, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': False,
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music pause error: {e}")
+
+@socketio.on('music_seek')
+def handle_music_seek(data):
+    """Seek to position"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    time_pos = data.get('time', 0)
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'current_time': time_pos, 'updated_at': datetime.utcnow()}}
+        )
+
+        emit('music_time_sync', {'room_id': room_id, 'time': time_pos}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music seek error: {e}")
+
+@socketio.on('music_next')
+def handle_music_next(data):
+    """Next track"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        playlist = room.get('playlist', [])
+        current = room.get('current_track', 0)
+        repeat = room.get('repeat', 'none')
+
+        if repeat == 'one':
+            next_track = current
+        elif room.get('shuffle'):
+            import random
+            next_track = random.randint(0, len(playlist) - 1) if playlist else 0
+        else:
+            next_track = current + 1
+            if next_track >= len(playlist):
+                if repeat == 'all':
+                    next_track = 0
+                else:
+                    next_track = current
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'current_track': next_track, 'current_time': 0, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': 0,
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music next error: {e}")
+
+@socketio.on('music_prev')
+def handle_music_prev(data):
+    """Previous track"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        current = room.get('current_track', 0)
+        prev_track = max(0, current - 1)
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'current_track': prev_track, 'current_time': 0, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': prev_track,
+            'current_time': 0,
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music prev error: {e}")
+
+@socketio.on('music_shuffle')
+def handle_music_shuffle(data):
+    """Toggle shuffle"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    enabled = data.get('enabled', False)
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'shuffle': enabled, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': enabled,
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music shuffle error: {e}")
+
+@socketio.on('music_repeat')
+def handle_music_repeat(data):
+    """Set repeat mode"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    mode = data.get('mode', 'none')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'repeat': mode, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': mode
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Music repeat error: {e}")
+
+@socketio.on('add_track')
+def handle_add_track(data):
+    """Add track to playlist"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    track = data.get('track')
+
+    if not track or not track.get('name'):
+        return
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$push': {'playlist': track}, '$set': {'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Add track error: {e}")
+
+@socketio.on('remove_track')
+def handle_remove_track(data):
+    """Remove track from playlist"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    track_id = data.get('track_id')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        playlist = room.get('playlist', [])
+        new_playlist = [t for t in playlist if t.get('id') != track_id]
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$set': {'playlist': new_playlist, 'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': new_playlist,
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Remove track error: {e}")
+
+@socketio.on('import_from_s3')
+def handle_import_from_s3(data):
+    """Import audio from S3 to playlist"""
+    username = session.get('user')
+    if not username:
+        return
+
+    room_id = data.get('room_id')
+    s3_key = data.get('s3_key')
+    name = data.get('name')
+
+    try:
+        db = get_db()
+        room = db.music_rooms.find_one({'_id': room_id})
+        if not room:
+            return
+
+        if room.get('control_mode') == 'host_only' and room.get('host_user') != username:
+            return
+
+        track = {
+            'id': str(uuid.uuid4())[:8],
+            'name': name or s3_key.rsplit('/', 1)[-1],
+            's3_key': s3_key,
+            'duration': 0,
+            'uploader': username
+        }
+
+        db.music_rooms.update_one(
+            {'_id': room_id},
+            {'$push': {'playlist': track}, '$set': {'updated_at': datetime.utcnow()}}
+        )
+
+        room = db.music_rooms.find_one({'_id': room_id})
+        state = {
+            'title': room.get('title'),
+            'code': room.get('code'),
+            'host_user': room.get('host_user'),
+            'members': room.get('members', []),
+            'control_mode': room.get('control_mode'),
+            'playlist': room.get('playlist', []),
+            'current_track': room.get('current_track', 0),
+            'current_time': room.get('current_time', 0),
+            'is_playing': room.get('is_playing', False),
+            'shuffle': room.get('shuffle', False),
+            'repeat': room.get('repeat', 'none')
+        }
+        emit('music_state', {'room_id': room_id, 'state': state}, room=f'music_{room_id}')
+
+    except Exception as e:
+        app.logger.error(f"Import S3 error: {e}")
+
+
+# ===========================================
+# Screen Share API & Socket.IO Handlers
+# ===========================================
+
+def _init_screen_sessions_collection(db):
+    """Ensure indexes on screen_sessions collection with TTL"""
+    col = db.screen_sessions
+    col.create_index('host_user')
+    col.create_index('created_at', expireAfterSeconds=24*60*60)  # 24h TTL
+    return col
+
+@app.route('/api/screen/sessions')
+def api_screen_sessions():
+    """List active screen share sessions"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        _init_screen_sessions_collection(db)
+
+        sessions = list(db.screen_sessions.find({}).sort('created_at', -1).limit(50))
+        result = []
+        for s in sessions:
+            result.append({
+                '_id': str(s['_id']),
+                'title': s.get('title', 'Screen Share'),
+                'host_user': s.get('host_user', ''),
+                'has_password': bool(s.get('password')),
+                'viewer_count': len(s.get('viewers', []))
+            })
+        return jsonify({'sessions': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/screen/session/<session_id>')
+def api_screen_session(session_id):
+    """Get session details"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+        if not sess:
+            return jsonify({'error': 'Session not found'}), 404
+
+        return jsonify({
+            'session_id': session_id,
+            'title': sess.get('title'),
+            'host_user': sess.get('host_user'),
+            'has_password': bool(sess.get('password')),
+            'viewer_count': len(sess.get('viewers', []))
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/screen/verify-password', methods=['POST'])
+def api_screen_verify_password():
+    """Verify session password"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    session_id = data.get('session_id')
+    password = data.get('password', '')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+        if not sess:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if sess.get('password'):
+            if not check_password_hash(sess['password'], password):
+                return jsonify({'error': 'Incorrect password'}), 403
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@socketio.on('start_screen_share')
+def handle_start_screen_share(data):
+    """Start a screen share session"""
+    username = session.get('user')
+    if not username:
+        return
+
+    title = data.get('title', 'Screen Share')
+    password = data.get('password', '')
+
+    try:
+        db = get_db()
+        _init_screen_sessions_collection(db)
+
+        session_id = str(uuid.uuid4())[:12]
+
+        sess = {
+            '_id': session_id,
+            'host_user': username,
+            'title': title,
+            'password': generate_password_hash(password) if password else None,
+            'viewers': [],
+            'created_at': datetime.utcnow()
+        }
+
+        db.screen_sessions.insert_one(sess)
+        join_room(f'screen_{session_id}')
+
+        emit('screen_session_started', {
+            'session_id': session_id,
+            'title': title
+        })
+
+    except Exception as e:
+        emit('screen_session_error', {'error': str(e)})
+
+@socketio.on('stop_screen_share')
+def handle_stop_screen_share(data):
+    """Stop screen share session"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id, 'host_user': username})
+        if sess:
+            db.screen_sessions.delete_one({'_id': session_id})
+            emit('screen_session_ended', {}, room=f'screen_{session_id}')
+            leave_room(f'screen_{session_id}')
+
+    except Exception as e:
+        app.logger.error(f"Stop screen share error: {e}")
+
+@socketio.on('join_screen_session')
+def handle_join_screen_session(data):
+    """Join a screen share session as viewer"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+    password = data.get('password', '')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+
+        if not sess:
+            emit('screen_session_error', {'error': 'Session not found'})
+            return
+
+        # Check password
+        if sess.get('password'):
+            if not check_password_hash(sess['password'], password):
+                emit('screen_session_error', {'error': 'Incorrect password'})
+                return
+
+        # Add viewer
+        if username not in sess.get('viewers', []):
+            db.screen_sessions.update_one(
+                {'_id': session_id},
+                {'$addToSet': {'viewers': username}}
+            )
+
+        join_room(f'screen_{session_id}')
+
+        emit('screen_session_joined', {
+            'session_id': session_id,
+            'title': sess.get('title'),
+            'host_user': sess.get('host_user')
+        })
+
+        # Notify host
+        updated = db.screen_sessions.find_one({'_id': session_id})
+        emit('viewer_joined', {
+            'viewer_id': username,
+            'viewers': updated.get('viewers', [])
+        }, room=f'screen_{session_id}')
+
+    except Exception as e:
+        emit('screen_session_error', {'error': str(e)})
+
+@socketio.on('leave_screen_session')
+def handle_leave_screen_session(data):
+    """Leave screen share session"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+
+    try:
+        db = get_db()
+        db.screen_sessions.update_one(
+            {'_id': session_id},
+            {'$pull': {'viewers': username}}
+        )
+
+        leave_room(f'screen_{session_id}')
+
+        updated = db.screen_sessions.find_one({'_id': session_id})
+        if updated:
+            emit('viewer_left', {
+                'viewer_id': username,
+                'viewers': updated.get('viewers', [])
+            }, room=f'screen_{session_id}')
+
+    except Exception as e:
+        app.logger.error(f"Leave screen session error: {e}")
+
+@socketio.on('webrtc_offer')
+def handle_webrtc_offer(data):
+    """Forward WebRTC offer to viewer"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+    viewer_id = data.get('viewer_id')
+    sdp = data.get('sdp')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id, 'host_user': username})
+        if not sess:
+            return
+
+        emit('webrtc_offer', {
+            'host_id': username,
+            'sdp': sdp
+        }, room=viewer_id)
+
+    except Exception as e:
+        app.logger.error(f"WebRTC offer error: {e}")
+
+@socketio.on('webrtc_answer')
+def handle_webrtc_answer(data):
+    """Forward WebRTC answer to host"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+    sdp = data.get('sdp')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+        if not sess:
+            return
+
+        emit('webrtc_answer', {
+            'viewer_id': username,
+            'sdp': sdp
+        }, room=sess['host_user'])
+
+    except Exception as e:
+        app.logger.error(f"WebRTC answer error: {e}")
+
+@socketio.on('webrtc_ice')
+def handle_webrtc_ice(data):
+    """Forward ICE candidate"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+    viewer_id = data.get('viewer_id')
+    candidate = data.get('candidate')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+        if not sess:
+            return
+
+        if username == sess['host_user']:
+            # Host sending to viewer
+            emit('webrtc_ice', {
+                'from_id': username,
+                'candidate': candidate
+            }, room=viewer_id)
+        else:
+            # Viewer sending to host
+            emit('webrtc_ice', {
+                'from_id': username,
+                'candidate': candidate
+            }, room=sess['host_user'])
+
+    except Exception as e:
+        app.logger.error(f"WebRTC ICE error: {e}")
+
+@socketio.on('screen_chat')
+def handle_screen_chat(data):
+    """Send chat message in screen share session"""
+    username = session.get('user')
+    if not username:
+        return
+
+    session_id = data.get('session_id')
+    content = data.get('content', '').strip()
+
+    if not content:
+        return
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'_id': session_id})
+        if not sess:
+            return
+
+        # Check if user is in session
+        if username != sess['host_user'] and username not in sess.get('viewers', []):
+            return
+
+        # Save to chat collection (optional)
+        db.screen_chat.insert_one({
+            'session_id': session_id,
+            'from_user': username,
+            'content': content,
+            'created_at': datetime.utcnow()
+        })
+
+        emit('screen_chat_message', {
+            'from_user': username,
+            'content': content
+        }, room=f'screen_{session_id}')
+
+    except Exception as e:
+        app.logger.error(f"Screen chat error: {e}")
 
 
 if __name__ == '__main__':

@@ -741,3 +741,201 @@ def copy_s3_to_workspace(config_snapshot, s3_key, item_type, username, dest_path
         return True, f"Copied to workspace: {item_name}"
     except Exception as e:
         return False, str(e)
+
+
+# ==========================================
+# Music Room audio operations
+# ==========================================
+
+def get_music_s3_config(db):
+    """Get system S3 config with _music/ prefix for music room"""
+    sys_cfg = db.s3_system_config.find_one({'_id': 'default'})
+    if not sys_cfg or not sys_cfg.get('endpoint_url'):
+        return None
+    base_prefix = sys_cfg.get('prefix', '').strip('/')
+    music_prefix = f"{base_prefix}/_music" if base_prefix else '_music'
+    return {
+        'endpoint_url': sys_cfg['endpoint_url'],
+        'access_key': sys_cfg['access_key'],
+        'secret_key': sys_cfg['secret_key'],
+        'region': sys_cfg.get('region', ''),
+        'bucket_name': sys_cfg['bucket_name'],
+        'prefix': music_prefix,
+        'source': 'music',
+    }
+
+
+def list_audio_files(config, room_id='', path=''):
+    """List audio files from S3 _music/ folder or user's S3.
+
+    Args:
+        config: S3 config dict
+        room_id: optional room ID to list room-specific uploads
+        path: optional path within the music folder
+
+    Returns:
+        list of audio file dicts with name, s3_key, size, modified
+    """
+    AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.wma', '.webm'}
+
+    client = get_s3_client(config)
+    bucket = config['bucket_name']
+    base_prefix = config.get('prefix', '').strip('/')
+
+    # Build prefix for listing
+    if room_id:
+        full_prefix = f"{base_prefix}/{room_id}/" if base_prefix else f"{room_id}/"
+    elif path:
+        full_prefix = f"{base_prefix}/{path}/" if base_prefix else f"{path}/"
+    else:
+        full_prefix = f"{base_prefix}/" if base_prefix else ''
+
+    items = []
+    paginator = client.get_paginator('list_objects_v2')
+
+    try:
+        for page in paginator.paginate(Bucket=bucket, Prefix=full_prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                name = key.rsplit('/', 1)[-1] if '/' in key else key
+                ext = os.path.splitext(name.lower())[1]
+
+                if ext in AUDIO_EXTENSIONS:
+                    items.append({
+                        'name': name,
+                        's3_key': key,
+                        'size': obj['Size'],
+                        'modified': obj['LastModified'].isoformat() if obj.get('LastModified') else '',
+                    })
+    except Exception:
+        pass
+
+    return sorted(items, key=lambda x: x['name'].lower())
+
+
+def stream_audio(config, s3_key, range_header=None):
+    """Stream audio file from S3 with optional range support for seeking.
+
+    Args:
+        config: S3 config dict
+        s3_key: full S3 key of the audio file
+        range_header: optional HTTP Range header string (e.g. "bytes=0-1024")
+
+    Returns:
+        tuple (generator, content_length, content_type, status_code, headers)
+        or None if not found
+    """
+    client = get_s3_client(config)
+    bucket = config['bucket_name']
+
+    # Guess content type
+    ext = os.path.splitext(s3_key.lower())[1]
+    content_types = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+        '.m4a': 'audio/mp4',
+        '.aac': 'audio/aac',
+        '.wma': 'audio/x-ms-wma',
+        '.webm': 'audio/webm',
+    }
+    content_type = content_types.get(ext, 'audio/mpeg')
+
+    try:
+        # Get file info first
+        head = client.head_object(Bucket=bucket, Key=s3_key)
+        total_size = head['ContentLength']
+
+        # Handle range request
+        start = 0
+        end = total_size - 1
+        status_code = 200
+        headers = {}
+
+        if range_header:
+            # Parse range header: bytes=start-end
+            import re
+            match = re.match(r'bytes=(\d*)-(\d*)', range_header)
+            if match:
+                start_str, end_str = match.groups()
+                if start_str:
+                    start = int(start_str)
+                if end_str:
+                    end = int(end_str)
+                else:
+                    end = total_size - 1
+
+                # Validate range
+                if start > end or start >= total_size:
+                    return None
+                end = min(end, total_size - 1)
+
+                status_code = 206
+                headers['Content-Range'] = f'bytes {start}-{end}/{total_size}'
+
+        headers['Accept-Ranges'] = 'bytes'
+        headers['Content-Type'] = content_type
+        content_length = end - start + 1
+
+        # Fetch with range if needed
+        range_param = f'bytes={start}-{end}' if range_header else None
+        kwargs = {'Bucket': bucket, 'Key': s3_key}
+        if range_param:
+            kwargs['Range'] = range_param
+
+        resp = client.get_object(**kwargs)
+
+        def generate():
+            body = resp['Body']
+            chunk_size = 1024 * 1024  # 1MB chunks
+            while True:
+                chunk = body.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+            body.close()
+
+        return generate(), content_length, content_type, status_code, headers
+
+    except Exception:
+        return None
+
+
+def upload_music_file(config, room_id, filename, file_data):
+    """Upload an audio file to music room's S3 folder.
+
+    Args:
+        config: S3 config dict (music config)
+        room_id: room ID for the upload folder
+        filename: original filename
+        file_data: file bytes or file-like object
+
+    Returns:
+        (success, s3_key or error message)
+    """
+    client = get_s3_client(config)
+    bucket = config['bucket_name']
+    base_prefix = config.get('prefix', '').strip('/')
+
+    # Sanitize filename
+    safe_name = os.path.basename(filename)
+    if not safe_name:
+        return False, "Invalid filename"
+
+    # Build S3 key: _music/{room_id}/{filename}
+    if base_prefix:
+        s3_key = f"{base_prefix}/{room_id}/{safe_name}"
+    else:
+        s3_key = f"{room_id}/{safe_name}"
+    s3_key = s3_key.lstrip('/')
+
+    try:
+        if hasattr(file_data, 'read'):
+            data = file_data.read()
+        else:
+            data = file_data
+        client.put_object(Bucket=bucket, Key=s3_key, Body=data)
+        return True, s3_key
+    except Exception as e:
+        return False, str(e)
