@@ -373,8 +373,12 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .window-controls .close{background:#ef4444}
 .window-controls button:hover{transform:scale(1.15);filter:brightness(1.1)}
 .window-controls button:active{transform:scale(0.95)}
-.window-body{flex:1;overflow:auto;background:#0f172a}
+.window-body{flex:1;overflow:auto;background:#0f172a;position:relative}
 .window-body iframe{width:100%;height:100%;border:none}
+.jupyter-dropzone{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(99,102,241,.85);display:flex;align-items:center;justify-content:center;z-index:100;pointer-events:auto}
+.jupyter-dropzone .dropzone-content{text-align:center;color:#fff;padding:40px}
+.jupyter-dropzone .dropzone-icon{font-size:64px;margin-bottom:16px}
+.jupyter-dropzone.drag-over{background:rgba(16,185,129,.9)}
 .resize-handle{position:absolute;background:transparent;z-index:10}
 .resize-n{top:0;left:10px;right:10px;height:6px;cursor:n-resize}
 .resize-s{bottom:0;left:10px;right:10px;height:6px;cursor:s-resize}
@@ -485,6 +489,79 @@ function minimizeWin(id){const w=wins[id];if(!w)return;w.el.classList.add('minim
 function toggleMax(id){const w=wins[id];if(!w)return;if(w.snap){unsnap(id);}else{w.restore={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};applySnap(id,'max');}}
 function focusWin(id){Object.values(wins).forEach(w=>w.el.classList.remove('active'));const w=wins[id];if(w){w.el.classList.add('active');w.el.style.zIndex=++zIdx;}updateDividers();updateTaskbar();}
 function updateTaskbar(){const c=document.getElementById('taskbar-apps');c.innerHTML='';Object.keys(wins).forEach(id=>{const w=wins[id],app=APPS[id],b=document.createElement('button');b.className='taskbar-item'+(w.el.classList.contains('active')&&!w.el.classList.contains('minimized')?' active':'');b.innerHTML='<span>'+app.icon+'</span> '+app.title;b.onclick=()=>{if(w.el.classList.contains('minimized'))openWindow(id);else if(w.el.classList.contains('active'))minimizeWin(id);else focusWin(id);};c.appendChild(b);});}
+
+// ===== CROSS-WINDOW FILE DRAG & DROP =====
+var draggedFile=null;
+window.addEventListener('message',function(e){
+    if(e.data&&e.data.type==='file-drag-start'){
+        draggedFile=e.data;
+        showJupyterDropZone(true);
+    }else if(e.data&&e.data.type==='file-drag-end'){
+        draggedFile=null;
+        showJupyterDropZone(false);
+    }
+});
+function showJupyterDropZone(show){
+    var jw=wins['jupyterlab'];
+    if(!jw)return;
+    var dz=jw.el.querySelector('.jupyter-dropzone');
+    if(show&&!dz){
+        dz=document.createElement('div');
+        dz.className='jupyter-dropzone';
+        dz.innerHTML='<div class="dropzone-content"><div class="dropzone-icon">&#128229;</div><div>Drop file here to import to JupyterLab</div></div>';
+        dz.ondragover=function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='copy';};
+        dz.ondragleave=function(){dz.classList.remove('drag-over');};
+        dz.ondragenter=function(){dz.classList.add('drag-over');};
+        dz.ondrop=function(ev){
+            ev.preventDefault();
+            if(draggedFile){
+                transferToJupyter(draggedFile);
+            }
+            draggedFile=null;
+            showJupyterDropZone(false);
+        };
+        jw.el.querySelector('.window-body').appendChild(dz);
+    }else if(!show&&dz){
+        dz.remove();
+    }
+}
+function transferToJupyter(fileData){
+    var body={source:fileData.source,items:[{name:fileData.filename,type:'file'}],source_path:fileData.path.replace(/\\/[^\\/]+$/,''),dest:'workspace',dest_path:''};
+    fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{
+        if(d.task_id){
+            checkTransferStatus(d.task_id);
+        }else if(d.error){
+            alert('Transfer failed: '+d.error);
+        }
+    });
+}
+function checkTransferStatus(taskId){
+    fetch('/api/transfer/status/'+taskId).then(r=>r.json()).then(d=>{
+        if(d.status==='completed'){
+            // Refresh JupyterLab file browser
+            var jw=wins['jupyterlab'];
+            if(jw){
+                var iframe=jw.el.querySelector('iframe');
+                if(iframe&&iframe.contentWindow){
+                    iframe.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');
+                }
+            }
+            showStatus('File transferred to JupyterLab');
+        }else if(d.status==='failed'){
+            alert('Transfer failed');
+        }else{
+            setTimeout(function(){checkTransferStatus(taskId);},1000);
+        }
+    });
+}
+function showStatus(msg){
+    var bar=document.createElement('div');
+    bar.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(16,185,129,.9);color:#fff;padding:10px 20px;border-radius:8px;z-index:10000;';
+    bar.textContent=msg;
+    document.body.appendChild(bar);
+    setTimeout(function(){bar.remove();},3000);
+}
 
 // Snap system
 function getZones(){
@@ -2202,8 +2279,8 @@ function s3Share(){var items=getChecked('s3');if(items.length!==1){showModal('Th
 function s3ShareWithUser(){var items=getChecked('s3');if(items.length!==1){showModal('Thông báo','Chọn đúng 1 mục để chia sẻ','warning');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var type=fi&&fi.dataset.type==='dir'?'dir':'file';showPrompt('Chia sẻ với người dùng','Nhập username','',function(toUser){if(!toUser)return;showPrompt('Lời nhắn','Nhập lời nhắn (tùy chọn)','',function(msg){fetch('/api/share-with-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item_name:name,item_type:type,s3_path:s3Path,to_user:toUser,message:msg||''})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}showModal('Thành công','Đã chia sẻ với '+toUser+'!','success');});});});}
 function sendToLab(){var items=getChecked('s3');if(!items.length){showModal('Thông báo','Chọn file để gửi vào JupyterLab','warning');return;}fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'s3',dest:'workspace',items:items,source_path:s3Path,dest_path:''})}).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}pollProgress(d.task_id,function(){try{var labFrame=window.parent.document.querySelector('#win-jupyterlab iframe');if(labFrame&&labFrame.contentWindow){labFrame.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');}}catch(e){}});});}
 // S3 drag and drop within folders
-function onDragStart(e,name,type){dragData={name:name,type:type,sourcePath:s3Path};e.target.classList.add('dragging');e.dataTransfer.effectAllowed=e.ctrlKey?'copy':'move';e.dataTransfer.setData('text/plain',name);}
-function onDragEnd(e){e.target.classList.remove('dragging');dragData=null;document.querySelectorAll('.drag-over-item,.drag-over-bc').forEach(el=>el.classList.remove('drag-over-item','drag-over-bc'));}
+function onDragStart(e,name,type){dragData={name:name,type:type,sourcePath:s3Path};e.target.classList.add('dragging');e.dataTransfer.effectAllowed=e.ctrlKey?'copy':'move';e.dataTransfer.setData('text/plain',name);var fpath=s3Path?(s3Path+'/'+name):name;if(window.parent&&type==='file')window.parent.postMessage({type:'file-drag-start',source:'s3',path:fpath,filename:name},'*');}
+function onDragEnd(e){e.target.classList.remove('dragging');dragData=null;document.querySelectorAll('.drag-over-item,.drag-over-bc').forEach(el=>el.classList.remove('drag-over-item','drag-over-bc'));if(window.parent)window.parent.postMessage({type:'file-drag-end'},'*');}
 function onDragOverItem(e){e.preventDefault();e.stopPropagation();e.currentTarget.classList.add('drag-over-item');e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';}
 function onDragLeaveItem(e){e.currentTarget.classList.remove('drag-over-item');}
 function onDropItem(e,folderName){e.preventDefault();e.stopPropagation();e.currentTarget.classList.remove('drag-over-item');if(!dragData)return;var destPath=s3Path?(s3Path+'/'+folderName):folderName;doS3Move([dragData.name],dragData.sourcePath,destPath,e.ctrlKey?'copy':'move');}
@@ -2259,7 +2336,9 @@ function formatSize(b){if(b===0)return'-';if(b<1024)return b+' B';if(b<1048576)r
 function renderBreadcrumb(el,path,fn){var parts=path?path.split('/').filter(Boolean):[];var html='<a href="#" onclick="'+fn+'(\\'\\');return false">Home</a>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <a href="#" onclick="'+fn+'(\\''+acc+'\\');return false">'+p+'</a>';});document.getElementById(el).innerHTML=html;}
 function getFileIcon(name){var ext=(name.split('.').pop()||'').toLowerCase();var m={'jpg':'&#128444;','jpeg':'&#128444;','png':'&#128444;','gif':'&#128444;','webp':'&#128444;','svg':'&#128444;','bmp':'&#128444;','mp4':'&#127916;','webm':'&#127916;','mov':'&#127916;','avi':'&#127916;','mkv':'&#127916;','mp3':'&#127925;','wav':'&#127925;','flac':'&#127925;','m4a':'&#127925;','pdf':'&#128462;','doc':'&#128462;','docx':'&#128462;','xls':'&#128202;','xlsx':'&#128202;','ppt':'&#128253;','pptx':'&#128253;','md':'&#128221;','html':'&#127760;','htm':'&#127760;','py':'&#128196;','js':'&#128196;','json':'&#128196;','txt':'&#128196;','log':'&#128196;','zip':'&#128230;','rar':'&#128230;','7z':'&#128230;','tar':'&#128230;','gz':'&#128230;'};return m[ext]||'&#128196;';}
 function openFile(source,path,name){if(window.parent&&window.parent.openFileViewer){window.parent.openFileViewer(source,path,name);}else{window.open('/viewer/'+source+'?path='+encodeURIComponent(path),'_blank');}}
-function renderList(el,items,path,fn,isS3){var html='';var src=isS3?'shared':'workspace';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="'+fn+'(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+src+'\\',\\''+fpath+'\\',\\''+i.name+'\\');"';html+='<div class="file-item" '+click+'><input type="checkbox" value="'+i.name+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById(el).innerHTML=html||'<div class="empty">Empty</div>';}
+function renderList(el,items,path,fn,isS3){var html='';var src=isS3?'shared':'workspace';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="'+fn+'(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+src+'\\',\\''+fpath+'\\',\\''+i.name+'\\');"';var drag=i.type==='file'?'draggable="true" ondragstart="startFileDrag(event,\\''+src+'\\',\\''+fpath+'\\',\\''+i.name+'\\');" ondragend="endFileDrag();"':'';html+='<div class="file-item" '+click+' '+drag+'><input type="checkbox" value="'+i.name+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById(el).innerHTML=html||'<div class="empty">Empty</div>';}
+function startFileDrag(e,source,path,filename){e.dataTransfer.setData('text/plain',filename);e.dataTransfer.effectAllowed='copy';if(window.parent)window.parent.postMessage({type:'file-drag-start',source:source,path:path,filename:filename},'*');}
+function endFileDrag(){if(window.parent)window.parent.postMessage({type:'file-drag-end'},'*');}
 function loadWs(p){wsPath=p||'';fetch('/api/workspace/list?path='+encodeURIComponent(wsPath)).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}renderBreadcrumb('ws-breadcrumb',wsPath,'loadWs');renderList('ws-list',d.items,wsPath,'loadWs',false);});}
 function loadS3(p){s3Path=p||'';fetch('/api/shared/list?path='+encodeURIComponent(s3Path)).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}renderBreadcrumb('s3-breadcrumb',s3Path,'loadS3');renderList('s3-list',d.items,s3Path,'loadS3',true);});}
 function getChecked(p){return Array.from(document.querySelectorAll('#'+(p==='s3'?'s3':'ws')+'-list input:checked')).map(b=>b.value);}
@@ -2331,7 +2410,9 @@ function formatSize(b){if(b===0)return'-';if(b<1024)return b+' B';if(b<1048576)r
 function renderBreadcrumb(path){var parts=path?path.split('/').filter(Boolean):[];var html='<a href="#" onclick="loadWs(\\'\\');return false">Home</a>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <a href="#" onclick="loadWs(\\''+acc+'\\');return false">'+p+'</a>';});document.getElementById('ws-breadcrumb').innerHTML=html;}
 function getFileIcon(name){var ext=(name.split('.').pop()||'').toLowerCase();var m={'jpg':'&#128444;','jpeg':'&#128444;','png':'&#128444;','gif':'&#128444;','webp':'&#128444;','svg':'&#128444;','bmp':'&#128444;','mp4':'&#127916;','webm':'&#127916;','mov':'&#127916;','avi':'&#127916;','mkv':'&#127916;','mp3':'&#127925;','wav':'&#127925;','flac':'&#127925;','m4a':'&#127925;','pdf':'&#128462;','doc':'&#128462;','docx':'&#128462;','xls':'&#128202;','xlsx':'&#128202;','ppt':'&#128253;','pptx':'&#128253;','md':'&#128221;','html':'&#127760;','htm':'&#127760;','py':'&#128196;','js':'&#128196;','json':'&#128196;','txt':'&#128196;','log':'&#128196;','zip':'&#128230;','rar':'&#128230;','7z':'&#128230;','tar':'&#128230;','gz':'&#128230;'};return m[ext]||'&#128196;';}
 function openFile(path,name){if(window.parent&&window.parent.openFileViewer){window.parent.openFileViewer('workspace',path,name);}else{window.open('/viewer/workspace?path='+encodeURIComponent(path),'_blank');}}
-function renderList(items,path){var html='';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="loadWs(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+fpath+'\\',\\''+i.name+'\\');"';html+='<div class="file-item" '+click+'><input type="checkbox" value="'+i.name+'" data-type="'+i.type+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById('ws-list').innerHTML=html||'<div class="empty">Empty folder</div>';}
+function renderList(items,path){var html='';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="loadWs(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+fpath+'\\',\\''+i.name+'\\');"';var drag=i.type==='file'?'draggable="true" ondragstart="startFileDrag(event,\\'workspace\\',\\''+fpath+'\\',\\''+i.name+'\\');" ondragend="endFileDrag();"':'';html+='<div class="file-item" '+click+' '+drag+'><input type="checkbox" value="'+i.name+'" data-type="'+i.type+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById('ws-list').innerHTML=html||'<div class="empty">Empty folder</div>';}
+function startFileDrag(e,source,path,filename){e.dataTransfer.setData('text/plain',filename);e.dataTransfer.effectAllowed='copy';if(window.parent)window.parent.postMessage({type:'file-drag-start',source:source,path:path,filename:filename},'*');}
+function endFileDrag(){if(window.parent)window.parent.postMessage({type:'file-drag-end'},'*');}
 function loadWs(p){wsPath=p||'';fetch('/api/workspace/list?path='+encodeURIComponent(wsPath)).then(r=>r.json()).then(d=>{if(d.error){showModal('Lỗi',d.error,'error');return;}renderBreadcrumb(wsPath);renderList(d.items,wsPath);});}
 function getChecked(){return Array.from(document.querySelectorAll('#ws-list input:checked')).map(b=>({name:b.value,type:b.dataset.type}));}
 function wsMkdir(){showPrompt('Tạo thư mục','Tên thư mục','',function(n){if(!n)return;fetch('/api/workspace/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:(wsPath?wsPath+'/':'')+n})}).then(()=>loadWs(wsPath));});}
