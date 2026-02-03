@@ -333,6 +333,24 @@ def get_shared_s3_config(db):
     }
 
 
+def get_chat_s3_config(db):
+    """Get system S3 config with _chat/ prefix for chat files"""
+    sys_cfg = db.s3_system_config.find_one({'_id': 'default'})
+    if not sys_cfg or not sys_cfg.get('endpoint_url'):
+        return None
+    base_prefix = sys_cfg.get('prefix', '').strip('/')
+    chat_prefix = f"{base_prefix}/_chat" if base_prefix else '_chat'
+    return {
+        'endpoint_url': sys_cfg['endpoint_url'],
+        'access_key': sys_cfg['access_key'],
+        'secret_key': sys_cfg['secret_key'],
+        'region': sys_cfg.get('region', ''),
+        'bucket_name': sys_cfg['bucket_name'],
+        'prefix': chat_prefix,
+        'source': 'chat',
+    }
+
+
 def list_s3_recursive(config_snapshot, s3_key_prefix):
     """List all objects recursively under a prefix (for folder share)"""
     client = get_s3_client(config_snapshot)

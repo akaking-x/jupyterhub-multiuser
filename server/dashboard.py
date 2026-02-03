@@ -36,7 +36,7 @@ from s3_manager import (
     upload_to_workspace, stream_workspace_file, read_workspace_text,
     list_s3, mkdir_s3, delete_s3, upload_to_s3,
     start_transfer, get_transfer_status,
-    get_shared_s3_config, list_s3_recursive,
+    get_shared_s3_config, get_chat_s3_config, list_s3_recursive,
     stream_s3_object, stream_s3_folder_as_zip, read_s3_text,
     move_s3_items, copy_s3_to_workspace,
 )
@@ -5974,10 +5974,10 @@ def api_chat_upload():
     try:
         db = get_db()
 
-        # Get shared S3 config
-        cfg = get_shared_s3_config(db)
+        # Get chat S3 config (separate from shared space)
+        cfg = get_chat_s3_config(db)
         if not cfg:
-            return jsonify({'error': 'Chat file sharing not configured (no shared S3)'}), 400
+            return jsonify({'error': 'Chat file sharing not configured (no S3)'}), 400
 
         # Generate unique path for chat files
         file_id = str(uuid.uuid4())[:12]
@@ -6083,12 +6083,12 @@ def api_chat_file_download(file_id):
         if username == file_doc['to_user'] and file_doc.get('status') != 'accepted':
             return 'File not accepted yet', 403
 
-        # Get shared S3 config
-        cfg = get_shared_s3_config(db)
+        # Get chat S3 config
+        cfg = get_chat_s3_config(db)
         if not cfg:
             return 'S3 not configured', 500
 
-        # Stream file from S3 (need to prepend prefix like shared space)
+        # Stream file from S3 (need to prepend prefix)
         prefix = cfg.get('prefix', '').strip('/')
         s3_key = f"{prefix}/{file_doc['s3_path']}" if prefix else file_doc['s3_path']
         gen, length, ctype = stream_s3_object(cfg, s3_key)
@@ -6228,12 +6228,12 @@ def api_chat_file_save():
         if file_doc.get('status') != 'accepted' and username == file_doc['to_user']:
             return jsonify({'error': 'File not accepted'}), 400
 
-        # Get shared S3 config to download from
-        cfg = get_shared_s3_config(db)
+        # Get chat S3 config to download from
+        cfg = get_chat_s3_config(db)
         if not cfg:
             return jsonify({'error': 'S3 not configured'}), 500
 
-        # Download file from shared S3
+        # Download file from chat S3
         import boto3
         s3 = boto3.client('s3',
             endpoint_url=cfg['endpoint_url'],
