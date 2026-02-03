@@ -456,7 +456,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},gamehub:{title:'GameHub',icon:'&#127918;',url:'/gamehub/',w:1200,h:750},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450},screenshare:{title:'Screen Share',icon:'&#128250;',url:'/embed/screen-share',w:1000,h:700},musicroom:{title:'Music Room',icon:'&#127925;',url:'/embed/music-room',w:500,h:700},todo:{title:'Todo',icon:'&#128203;',url:'/embed/todo',w:900,h:600}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:1000,h:600},browser:{title:'Browser',icon:'&#127760;',url:'/embed/browser',w:1100,h:700},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},gamehub:{title:'GameHub',icon:'&#127918;',url:'/gamehub/',w:1200,h:750},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450},screenshare:{title:'Screen Share',icon:'&#128250;',url:'/embed/screen-share',w:1000,h:700},musicroom:{title:'Music Room',icon:'&#127925;',url:'/embed/music-room',w:480,h:680},todo:{title:'Todo',icon:'&#128203;',url:'/embed/todo',w:900,h:600}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -3919,12 +3919,13 @@ function saveTask(){
         status:document.getElementById('task-status').value,
         due_date:document.getElementById('task-due').value||null
     };
-    if(!data.title){alert('Title is required');return;}
+    if(!data.title){showNotification('&#9888;','Error','Title is required');return;}
     var url=id?'/api/todos/'+id:'/api/todos';
     var method=id?'PUT':'POST';
     fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
     .then(r=>r.json()).then(d=>{
-        if(d.error){alert(d.error);return;}
+        if(d.error){showNotification('&#9888;','Error',d.error);return;}
+        showNotification('&#10004;','Success',id?'Task updated':'Task created');
         hideModal();
         loadTasks();
     });
@@ -4000,7 +4001,17 @@ init();
 EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
-.music-container{max-width:480px;margin:0 auto;padding:12px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column}
+.music-container{max-width:460px;margin:0 auto;padding:10px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+.toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:12px;animation:slideIn .3s ease;max-width:320px}
+.toast.success{border-color:#10b981;background:linear-gradient(135deg,#1e293b,#064e3b)}
+.toast.error{border-color:#ef4444;background:linear-gradient(135deg,#1e293b,#7f1d1d)}
+.toast.info{border-color:#6366f1;background:linear-gradient(135deg,#1e293b,#312e81)}
+.toast .icon{font-size:20px}
+.toast .message{flex:1;font-size:13px}
+.toast .close{background:none;border:none;color:#64748b;cursor:pointer;font-size:16px;padding:0}
+.toast .close:hover{color:#fff}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .room-list{flex:1;overflow-y:auto}
 .room-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
 .room-item:hover{border-color:#6366f1}
@@ -4018,26 +4029,26 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
 .player-header .room-title{font-size:16px;font-weight:600}
 .player-header .room-code{background:#6366f1;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:1px;cursor:pointer}
 .player-header .room-code:hover{background:#4f46e5}
-.now-playing{background:#1e293b;border-radius:12px;padding:20px;margin:16px 0;text-align:center}
-.now-playing .icon{font-size:60px;margin-bottom:12px;opacity:0.5}
-.now-playing .track-name{font-size:18px;font-weight:600;margin-bottom:8px}
-.now-playing .track-info{font-size:12px;color:#94a3b8}
-.progress-container{margin:16px 0}
-.progress-bar{height:6px;background:#334155;border-radius:3px;cursor:pointer;position:relative}
-.progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:3px;transition:width .1s}
+.now-playing{background:#1e293b;border-radius:10px;padding:12px;margin:10px 0;text-align:center}
+.now-playing .icon{font-size:40px;margin-bottom:6px;opacity:0.5}
+.now-playing .track-name{font-size:15px;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now-playing .track-info{font-size:11px;color:#94a3b8}
+.progress-container{margin:8px 0}
+.progress-bar{height:5px;background:#334155;border-radius:3px;cursor:pointer;position:relative}
+.progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:3px;width:0%}
 .progress-bar:hover .progress-fill{background:linear-gradient(90deg,#818cf8,#a78bfa)}
 .time-display{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-top:6px}
-.controls{display:flex;align-items:center;justify-content:center;gap:16px;margin:16px 0}
-.controls button{background:transparent;border:none;color:#e2e8f0;font-size:24px;cursor:pointer;padding:8px;border-radius:50%;transition:all .2s}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0}
+.controls button{background:transparent;border:none;color:#e2e8f0;font-size:20px;cursor:pointer;padding:6px;border-radius:50%;transition:all .2s}
 .controls button:hover{background:#334155;transform:scale(1.1)}
 .controls button.active{color:#6366f1}
-.controls .play-btn{background:#6366f1;width:56px;height:56px;border-radius:50%;font-size:28px;display:flex;align-items:center;justify-content:center}
+.controls .play-btn{background:#6366f1;width:48px;height:48px;border-radius:50%;font-size:22px;display:flex;align-items:center;justify-content:center}
 .controls .play-btn:hover{background:#4f46e5;transform:scale(1.05)}
-.secondary-controls{display:flex;align-items:center;justify-content:center;gap:24px;margin-bottom:16px}
-.secondary-controls button{background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:6px}
+.secondary-controls{display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:8px}
+.secondary-controls button{background:transparent;border:none;color:#94a3b8;font-size:16px;cursor:pointer;padding:4px}
 .secondary-controls button:hover{color:#e2e8f0}
 .secondary-controls button.active{color:#6366f1}
-.playlist{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:200px}
+.playlist{flex:1;background:#1e293b;border-radius:8px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:120px}
 .playlist-header{padding:12px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
 .playlist-header h4{margin:0;font-size:13px}
 .playlist-actions{display:flex;gap:6px}
@@ -4054,7 +4065,7 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
 .playlist-item .remove{background:transparent;border:none;color:#64748b;cursor:pointer;padding:4px;font-size:14px;opacity:0}
 .playlist-item:hover .remove{opacity:1}
 .playlist-item .remove:hover{color:#ef4444}
-.members{background:#1e293b;border-radius:10px;border:1px solid #334155;margin-top:12px;max-height:150px;overflow-y:auto}
+.members{background:#1e293b;border-radius:8px;border:1px solid #334155;margin-top:8px;max-height:100px;overflow-y:auto;flex-shrink:0}
 .members-header{padding:10px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;font-size:13px}
 .member-item{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:12px}
 .member-item .dot{width:8px;height:8px;background:#10b981;border-radius:50%}
@@ -4187,8 +4198,19 @@ EMBED_MUSIC_ROOM = EMBED_CSS + """<!DOCTYPE html><html><head><title>Music Room</
 </div>
 
 <audio id="audio" style="display:none"></audio>
+<div class="toast-container" id="toast-container"></div>
 
 <script>
+function showToast(message,type='info',duration=3000){
+    var container=document.getElementById('toast-container');
+    var toast=document.createElement('div');
+    toast.className='toast '+type;
+    var icons={success:'&#10004;',error:'&#10006;',info:'&#8505;'};
+    toast.innerHTML='<span class="icon">'+icons[type]+'</span><span class="message">'+message+'</span><button class="close" onclick="this.parentElement.remove()">&times;</button>';
+    container.appendChild(toast);
+    if(duration>0)setTimeout(function(){toast.remove();},duration);
+}
+
 var socket=io();
 var currentUser='{{ username }}';
 var currentRoom=null;
@@ -4230,7 +4252,7 @@ function createRoom(){
 
 function joinByCode(){
     var code=document.getElementById('join-code').value.trim().toUpperCase();
-    if(code.length!==6){alert('Invalid code');return;}
+    if(code.length!==6){showToast('Enter 6-character code','error');return;}
     socket.emit('join_music_room',{code:code});
 }
 
@@ -4304,12 +4326,17 @@ function updateNowPlaying(){
         document.getElementById('playing-icon').innerHTML='&#127926;';
         document.getElementById('track-name').textContent=track.name;
         document.getElementById('track-info').textContent='Track '+(roomState.current_track+1)+' of '+roomState.playlist.length;
-        document.getElementById('total-time').textContent=formatTime(track.duration||0);
+        // Don't override total-time here, let audio.onloadedmetadata handle it
+        if(track.duration>0){
+            document.getElementById('total-time').textContent=formatTime(track.duration);
+        }
     }else{
         document.getElementById('playing-icon').innerHTML='&#127925;';
         document.getElementById('track-name').textContent='No track playing';
         document.getElementById('track-info').textContent='Add songs to playlist';
+        document.getElementById('current-time').textContent='0:00';
         document.getElementById('total-time').textContent='0:00';
+        document.getElementById('progress-fill').style.width='0%';
     }
 }
 
@@ -4360,9 +4387,10 @@ function seekTo(e){
     var bar=document.getElementById('progress-bar');
     var rect=bar.getBoundingClientRect();
     var pct=(e.clientX-rect.left)/rect.width;
-    var track=roomState.playlist[roomState.current_track];
-    if(track){
-        var time=pct*(track.duration||0);
+    var duration=audio.duration||0;
+    if(duration>0){
+        var time=pct*duration;
+        audio.currentTime=time;
         socket.emit('music_seek',{room_id:currentRoom,time:time});
     }
 }
@@ -4374,7 +4402,7 @@ function removeTrack(index){
 }
 
 function copyCode(){
-    navigator.clipboard.writeText(roomState.code||'').then(()=>alert('Code copied!'));
+    navigator.clipboard.writeText(roomState.code||'').then(()=>showToast('Code copied: '+(roomState.code||''),'success'));
 }
 
 function showAddTrack(){document.getElementById('add-modal').classList.add('show');}
@@ -4404,7 +4432,7 @@ function uploadTrack(){
             if(d.track)socket.emit('add_track',{room_id:currentRoom,track:d.track});
             hideAddModal();
         }else{
-            alert('Upload failed');
+            showToast('Upload failed','error');
         }
     };
     xhr.open('POST','/api/music/upload');
@@ -4443,10 +4471,12 @@ function toggleS3File(el){
 }
 
 function importSelected(){
-    if(!selectedS3Files.length){alert('Select files first');return;}
+    if(!selectedS3Files.length){showToast('Select files first','error');return;}
+    var count=selectedS3Files.length;
     selectedS3Files.forEach(f=>{
         socket.emit('import_from_s3',{room_id:currentRoom,s3_key:f.s3_key,name:f.name});
     });
+    showToast('Imported '+count+' track(s)','success');
     hideS3Modal();
 }
 
@@ -4459,16 +4489,31 @@ function setupAudio(){
     audio.onended=function(){
         if(isHost)socket.emit('music_next',{room_id:currentRoom});
     };
-    audio.ontimeupdate=function(){
-        if(!roomState.playlist.length)return;
-        var track=roomState.playlist[roomState.current_track];
-        var duration=track?track.duration:0;
-        var current=audio.currentTime;
-        document.getElementById('current-time').textContent=formatTime(current);
-        if(duration>0){
-            document.getElementById('progress-fill').style.width=(current/duration*100)+'%';
+    audio.onloadedmetadata=function(){
+        var duration=audio.duration;
+        if(duration&&!isNaN(duration)){
+            document.getElementById('total-time').textContent=formatTime(duration);
+            // Update track duration in roomState for display
+            var track=roomState.playlist[roomState.current_track];
+            if(track)track.duration=duration;
         }
     };
+    audio.ontimeupdate=function(){
+        var duration=audio.duration||0;
+        var current=audio.currentTime||0;
+        document.getElementById('current-time').textContent=formatTime(current);
+        if(duration>0){
+            var pct=(current/duration)*100;
+            document.getElementById('progress-fill').style.width=pct+'%';
+            document.getElementById('total-time').textContent=formatTime(duration);
+        }
+    };
+    // Sync time periodically if host
+    setInterval(function(){
+        if(isHost&&currentRoom&&roomState.is_playing&&audio.currentTime>0){
+            socket.emit('music_time_sync',{room_id:currentRoom,time:audio.currentTime});
+        }
+    },3000);
 }
 
 function loadAndPlayTrack(){
@@ -4496,15 +4541,19 @@ function setupSocket(){
         loadAndPlayTrack();
     });
     socket.on('music_room_error',function(data){
-        alert(data.error||'Error');
+        showToast(data.error||'Error','error');
     });
     socket.on('music_state',function(data){
         if(data.room_id!==currentRoom)return;
         var wasPlaying=roomState.is_playing;
         var oldTrack=roomState.current_track;
+        var oldPlaylistLen=roomState.playlist?roomState.playlist.length:0;
+        var oldTrackKey=roomState.playlist&&roomState.playlist[oldTrack]?roomState.playlist[oldTrack].s3_key:'';
         roomState=data.state;
         updateRoomUI();
-        if(roomState.current_track!==oldTrack){
+        var newTrackKey=roomState.playlist&&roomState.playlist[roomState.current_track]?roomState.playlist[roomState.current_track].s3_key:'';
+        // Reload if track changed OR playlist changed OR track key changed
+        if(roomState.current_track!==oldTrack||roomState.playlist.length!==oldPlaylistLen||oldTrackKey!==newTrackKey){
             loadAndPlayTrack();
         }else if(roomState.is_playing!==wasPlaying){
             if(roomState.is_playing)audio.play().catch(e=>{});
@@ -4522,7 +4571,7 @@ function setupSocket(){
 }
 
 function formatTime(s){
-    if(!s||isNaN(s))return'0:00';
+    if(!s||isNaN(s)||s<=0)return'--:--';
     var m=Math.floor(s/60);
     var sec=Math.floor(s%60);
     return m+':'+(sec<10?'0':'')+sec;
@@ -4544,13 +4593,19 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
 .list-view,.host-view,.viewer-view{display:none;flex-direction:column;flex:1;min-height:0}
 .list-view.show,.host-view.show,.viewer-view.show{display:flex}
 .session-list{flex:1;overflow-y:auto}
-.session-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s}
+.session-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;position:relative}
 .session-item:hover{border-color:#6366f1}
 .session-item .title{font-size:15px;font-weight:600;margin-bottom:4px}
 .session-item .info{font-size:12px;color:#94a3b8;display:flex;gap:12px}
 .session-item .lock{color:#f59e0b}
-.start-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:20px;margin-bottom:16px}
-.start-section h3{margin:0 0 16px 0;font-size:15px}
+.session-item .code{background:#6366f1;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:1px;margin-left:8px}
+.start-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
+.start-section h3{margin:0 0 12px 0;font-size:14px}
+.join-section{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
+.join-section h3{margin:0 0 12px 0;font-size:14px}
+.join-row{display:flex;gap:8px}
+.join-row input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:14px;text-transform:uppercase;letter-spacing:2px;text-align:center}
+.join-row input:focus{outline:none;border-color:#6366f1}
 .form-row{display:flex;gap:12px;margin-bottom:12px}
 .form-row input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;color:#e2e8f0;font-size:13px}
 .form-row input:focus{outline:none;border-color:#6366f1}
@@ -4593,6 +4648,15 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
 .modal-footer{padding:14px 16px;border-top:1px solid #334155;display:flex;justify-content:flex-end;gap:8px}
 .main-content{display:flex;gap:12px;flex:1;min-height:0}
 .video-section{flex:1;display:flex;flex-direction:column;min-height:0}
+.toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:12px;animation:slideIn .3s ease;max-width:320px}
+.toast.success{border-color:#10b981;background:linear-gradient(135deg,#1e293b,#064e3b)}
+.toast.error{border-color:#ef4444;background:linear-gradient(135deg,#1e293b,#7f1d1d)}
+.toast.info{border-color:#6366f1;background:linear-gradient(135deg,#1e293b,#312e81)}
+.toast .icon{font-size:20px}
+.toast .message{flex:1;font-size:13px}
+.toast .close{background:none;border:none;color:#64748b;cursor:pointer;font-size:16px;padding:0}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 </style>
 </head><body>
 <div class="screen-container">
@@ -4605,16 +4669,30 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
             </div>
             <button class="btn btn-success" onclick="startShare()">&#128250; Start Sharing</button>
         </div>
+        <div class="join-section">
+            <h3>&#128279; Join by Code</h3>
+            <div class="join-row">
+                <input type="text" id="join-code" placeholder="ABC123" maxlength="6">
+                <button class="btn btn-primary" onclick="joinByCode()">Join</button>
+            </div>
+        </div>
         <h3 style="font-size:14px;margin-bottom:12px">Active Sessions</h3>
         <div class="session-list" id="session-list"></div>
     </div>
 
     <div class="host-view" id="host-view">
         <div class="host-header">
-            <span class="title" id="host-title">Screen Share</span>
-            <button class="btn btn-danger btn-sm" onclick="stopShare()">Stop Sharing</button>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span class="title" id="host-title">Screen Share</span>
+                <span style="background:#6366f1;padding:4px 12px;border-radius:6px;font-size:14px;font-weight:600;letter-spacing:2px;cursor:pointer" id="host-code" onclick="copyCode()" title="Click to copy">------</span>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="showGuestLink()">&#128279; Guest Link</button>
+                <button class="btn btn-danger btn-sm" onclick="stopShare()">&#9632; Stop</button>
+            </div>
         </div>
-        <div class="share-link">
+        <div class="share-link" id="share-link-container" style="display:none">
+            <span style="font-size:12px;color:#94a3b8;margin-right:8px">Guest link:</span>
             <input type="text" id="share-link" readonly>
             <button onclick="copyLink()">Copy</button>
         </div>
@@ -4676,6 +4754,8 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
     </div>
 </div>
 
+<div class="toast-container" id="toast-container"></div>
+
 <div class="modal-overlay" id="password-modal">
     <div class="modal">
         <div class="modal-header">
@@ -4693,6 +4773,16 @@ EMBED_SCREEN_SHARE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Screen Sha
 </div>
 
 <script>
+function showToast(message,type='info',duration=3000){
+    var container=document.getElementById('toast-container');
+    var toast=document.createElement('div');
+    toast.className='toast '+type;
+    var icons={success:'&#10004;',error:'&#10006;',info:'&#8505;'};
+    toast.innerHTML='<span class="icon">'+icons[type]+'</span><span class="message">'+message+'</span><button class="close" onclick="this.parentElement.remove()">&times;</button>';
+    container.appendChild(toast);
+    if(duration>0)setTimeout(function(){toast.remove();},duration);
+}
+
 var socket=io();
 var currentUser='{{ username }}';
 var currentSession=null;
@@ -4718,12 +4808,20 @@ function loadSessions(){
         var html='';
         d.sessions.forEach(s=>{
             html+='<div class="session-item" onclick="joinSession(\\''+s._id+'\\','+s.has_password+')">';
-            html+='<div class="title">'+escapeHtml(s.title)+(s.has_password?' <span class="lock">&#128274;</span>':'')+'</div>';
+            html+='<div class="title">'+escapeHtml(s.title)+(s.has_password?' <span class="lock">&#128274;</span>':'');
+            if(s.code)html+='<span class="code">'+s.code+'</span>';
+            html+='</div>';
             html+='<div class="info"><span>Host: '+s.host_user+'</span><span>&#128101; '+s.viewer_count+'</span></div>';
             html+='</div>';
         });
         list.innerHTML=html;
     });
+}
+
+function joinByCode(){
+    var code=document.getElementById('join-code').value.trim().toUpperCase();
+    if(code.length!==6){showToast('Enter 6-character code','error');return;}
+    socket.emit('join_screen_by_code',{code:code});
 }
 
 async function startShare(){
@@ -4735,7 +4833,7 @@ async function startShare(){
         localStream.getVideoTracks()[0].onended=function(){stopShare();};
         socket.emit('start_screen_share',{title:title,password:password});
     }catch(e){
-        alert('Could not start screen share: '+e.message);
+        showToast('Could not start: '+e.message,'error');
     }
 }
 
@@ -4801,8 +4899,22 @@ function showViewerView(){
 
 function copyLink(){
     var input=document.getElementById('share-link');
-    navigator.clipboard.writeText(input.value).then(()=>alert('Link copied!'));
+    navigator.clipboard.writeText(input.value).then(()=>showToast('Guest link copied!','success'));
 }
+
+function copyCode(){
+    var code=document.getElementById('host-code').textContent;
+    if(code&&code!=='------'){
+        navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code,'success'));
+    }
+}
+
+function showGuestLink(){
+    var container=document.getElementById('share-link-container');
+    container.style.display=container.style.display==='none'?'flex':'none';
+}
+
+var sessionCode='';
 
 function toggleMic(){
     // Placeholder - would toggle mic track
@@ -4872,9 +4984,11 @@ async function handleOffer(hostId,sdp){
 function setupSocket(){
     socket.on('screen_session_started',function(data){
         currentSession=data.session_id;
+        sessionCode=data.code||'';
         isHost=true;
         document.getElementById('host-title').textContent=data.title;
-        document.getElementById('share-link').value=location.origin+'/screen/'+data.session_id;
+        document.getElementById('host-code').textContent=sessionCode;
+        document.getElementById('share-link').value=location.origin+'/screen-guest?code='+sessionCode;
         showHostView();
     });
     socket.on('screen_session_joined',function(data){
@@ -4884,7 +4998,7 @@ function setupSocket(){
         showViewerView();
     });
     socket.on('screen_session_error',function(data){
-        alert(data.error||'Error');
+        showToast(data.error||'Error','error');
     });
     socket.on('viewer_joined',function(data){
         if(!isHost)return;
@@ -4917,7 +5031,7 @@ function setupSocket(){
         addChatMessage(data.from_user,data.content,isHost?'host':'viewer');
     });
     socket.on('screen_session_ended',function(){
-        alert('Host ended the session');
+        showToast('Host ended the session','info');
         leaveSession();
     });
 }
@@ -4936,6 +5050,213 @@ function escapeHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 
 init();
 </script></body></html>"""
+
+# ===========================================
+# EMBED_SCREEN_GUEST - Guest access for screen share
+# ===========================================
+
+EMBED_SCREEN_GUEST = """<!DOCTYPE html><html><head><title>Screen Share - Guest</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.container{max-width:500px;margin:0 auto;padding:40px 20px}
+.card{background:#1e293b;border-radius:16px;border:1px solid #334155;overflow:hidden}
+.card-header{background:#334155;padding:20px;text-align:center}
+.card-header h1{font-size:24px;margin-bottom:8px}
+.card-header p{color:#94a3b8;font-size:14px}
+.card-body{padding:24px}
+.form-group{margin-bottom:20px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:8px}
+.form-group input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;color:#e2e8f0;font-size:15px}
+.form-group input:focus{outline:none;border-color:#6366f1}
+.form-group input.code-input{text-transform:uppercase;letter-spacing:4px;text-align:center;font-size:20px;font-weight:600}
+.btn{width:100%;background:#6366f1;border:none;color:#fff;padding:14px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.btn:hover{background:#4f46e5}
+.btn:disabled{background:#475569;cursor:not-allowed}
+.error{background:#7f1d1d;border:1px solid #991b1b;color:#fca5a5;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;display:none}
+.error.show{display:block}
+.viewer-container{display:none;height:100vh;flex-direction:column}
+.viewer-container.show{display:flex}
+.viewer-header{background:#1e293b;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #334155}
+.viewer-header .title{font-size:16px;font-weight:600}
+.viewer-header .btn-leave{background:#334155;border:none;color:#e2e8f0;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+.viewer-header .btn-leave:hover{background:#475569}
+.video-container{flex:1;background:#000;display:flex;align-items:center;justify-content:center}
+.video-container video{max-width:100%;max-height:100%;object-fit:contain}
+.connecting{color:#64748b;text-align:center}
+.connecting .icon{font-size:48px;margin-bottom:12px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.join-container{display:block}
+.join-container.hide{display:none}
+</style>
+</head><body>
+
+<div class="join-container" id="join-container">
+<div class="container">
+    <div class="card">
+        <div class="card-header">
+            <h1>&#128250; Screen Share</h1>
+            <p>Enter the code to watch a screen share</p>
+        </div>
+        <div class="card-body">
+            <div class="error" id="error-msg"></div>
+            <div class="form-group">
+                <label>Room Code</label>
+                <input type="text" id="code-input" class="code-input" placeholder="ABC123" maxlength="6" value="{{ code }}">
+            </div>
+            <div class="form-group">
+                <label>Your Name</label>
+                <input type="text" id="name-input" placeholder="Enter your name...">
+            </div>
+            <div class="form-group" id="password-group" style="display:none">
+                <label>Password</label>
+                <input type="password" id="password-input" placeholder="Enter password...">
+            </div>
+            <button class="btn" id="join-btn" onclick="joinSession()">Join Session</button>
+        </div>
+    </div>
+</div>
+</div>
+
+<div class="viewer-container" id="viewer-container">
+    <div class="viewer-header">
+        <span class="title" id="session-title">Watching: Screen Share</span>
+        <button class="btn-leave" onclick="leaveSession()">Leave</button>
+    </div>
+    <div class="video-container">
+        <video id="remote-video" autoplay playsinline></video>
+        <div class="connecting" id="connecting">
+            <div class="icon">&#128250;</div>
+            <div>Connecting to stream...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+var socket=io();
+var guestName='';
+var currentSession=null;
+var peerConnection=null;
+var iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+
+function generateGuestName(){
+    var chars='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var result='GUEST-';
+    for(var i=0;i<5;i++)result+=chars.charAt(Math.floor(Math.random()*chars.length));
+    return result;
+}
+
+function init(){
+    document.getElementById('name-input').value=generateGuestName();
+    var code=document.getElementById('code-input').value;
+    if(code&&code.length===6){
+        document.getElementById('code-input').focus();
+    }
+    setupSocket();
+}
+
+function showError(msg){
+    var el=document.getElementById('error-msg');
+    el.textContent=msg;
+    el.classList.add('show');
+}
+
+function hideError(){
+    document.getElementById('error-msg').classList.remove('show');
+}
+
+function joinSession(){
+    hideError();
+    var code=document.getElementById('code-input').value.trim().toUpperCase();
+    guestName=document.getElementById('name-input').value.trim()||generateGuestName();
+    var password=document.getElementById('password-input').value;
+
+    if(code.length!==6){
+        showError('Please enter a 6-character code');
+        return;
+    }
+
+    document.getElementById('join-btn').disabled=true;
+    document.getElementById('join-btn').textContent='Connecting...';
+
+    socket.emit('join_screen_by_code',{code:code,guest_name:guestName,password:password});
+}
+
+function leaveSession(){
+    if(currentSession)socket.emit('leave_screen_session',{session_id:currentSession});
+    if(peerConnection){
+        peerConnection.close();
+        peerConnection=null;
+    }
+    currentSession=null;
+    document.getElementById('join-container').classList.remove('hide');
+    document.getElementById('viewer-container').classList.remove('show');
+    document.getElementById('join-btn').disabled=false;
+    document.getElementById('join-btn').textContent='Join Session';
+}
+
+function showViewer(title){
+    document.getElementById('join-container').classList.add('hide');
+    document.getElementById('viewer-container').classList.add('show');
+    document.getElementById('session-title').textContent='Watching: '+title;
+}
+
+async function handleOffer(hostId,sdp){
+    peerConnection=new RTCPeerConnection({iceServers:iceServers});
+    peerConnection.onicecandidate=function(e){
+        if(e.candidate){
+            socket.emit('webrtc_ice',{session_id:currentSession,candidate:e.candidate});
+        }
+    };
+    peerConnection.ontrack=function(e){
+        document.getElementById('remote-video').srcObject=e.streams[0];
+        document.getElementById('connecting').style.display='none';
+    };
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+    var answer=await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('webrtc_answer',{session_id:currentSession,sdp:peerConnection.localDescription});
+}
+
+function setupSocket(){
+    socket.on('screen_session_joined',function(data){
+        currentSession=data.session_id;
+        showViewer(data.title||'Screen Share');
+    });
+    socket.on('screen_session_error',function(data){
+        showError(data.error||'Failed to join');
+        document.getElementById('join-btn').disabled=false;
+        document.getElementById('join-btn').textContent='Join Session';
+        if(data.error&&data.error.includes('password')){
+            document.getElementById('password-group').style.display='block';
+        }
+    });
+    socket.on('webrtc_offer',function(data){
+        handleOffer(data.host_id,data.sdp);
+    });
+    socket.on('webrtc_ice',async function(data){
+        if(peerConnection&&data.candidate){
+            try{await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){}
+        }
+    });
+    socket.on('screen_session_ended',function(){
+        showSessionEndedModal();
+    });
+}
+
+function showSessionEndedModal(){
+    var overlay=document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999';
+    overlay.innerHTML='<div style="background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px;text-align:center;max-width:360px"><div style="font-size:48px;margin-bottom:16px">&#128250;</div><h2 style="margin:0 0 12px 0;font-size:20px">Session Ended</h2><p style="color:#94a3b8;margin:0 0 24px 0">The host has ended this screen share session.</p><button onclick="location.reload()" style="background:#6366f1;border:none;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;cursor:pointer">OK</button></div>';
+    document.body.appendChild(overlay);
+}
+
+init();
+</script>
+</body></html>"""
 
 # ===========================================
 # EMBED_USER_SHARES - Incoming shares from other users
@@ -5058,6 +5379,247 @@ EMBED_CHANGE_PW = EMBED_CSS + """<!DOCTYPE html><html><head><title>Change Passwo
         </div>
     </div>
 </div></body></html>"""
+
+# ===========================================
+# GameHub Embed
+# ===========================================
+
+EMBED_GAME_HUB = EMBED_CSS + """<!DOCTYPE html><html><head><title>GameHub</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);min-height:100vh;color:#fff}
+.container{padding:20px;max-width:1200px;margin:0 auto}
+.header{text-align:center;margin-bottom:30px}
+.header h1{font-size:2.5rem;background:linear-gradient(90deg,#f093fb,#f5576c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.header p{color:#a0a0a0;font-size:14px}
+.games-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+.game-card{background:rgba(255,255,255,.05);border-radius:16px;overflow:hidden;cursor:pointer;transition:all .3s;border:1px solid rgba(255,255,255,.1)}
+.game-card:hover{transform:translateY(-5px);box-shadow:0 20px 40px rgba(0,0,0,.4);border-color:rgba(255,255,255,.2)}
+.game-preview{height:180px;display:flex;align-items:center;justify-content:center;font-size:80px;background:linear-gradient(135deg,var(--c1),var(--c2))}
+.game-info{padding:16px}
+.game-info h3{font-size:18px;margin-bottom:6px}
+.game-info p{color:#888;font-size:13px}
+.game-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000}
+.game-modal.active{display:flex;flex-direction:column}
+.modal-header{background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.modal-header h2{font-size:18px}
+.modal-header .close-btn{background:#ff4757;border:none;color:#fff;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:20px}
+.modal-body{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+.game-frame{background:#000;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.5)}
+/* 2048 styles */
+.game-2048{width:400px;padding:20px;background:#faf8ef;border-radius:12px}
+.game-2048 .score-board{display:flex;justify-content:space-between;margin-bottom:16px}
+.game-2048 .score-box{background:#bbada0;color:#fff;padding:8px 16px;border-radius:6px;text-align:center}
+.game-2048 .score-box span{display:block;font-size:12px;opacity:.8}
+.game-2048 .score-box strong{font-size:20px}
+.game-2048 .grid-2048{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#bbada0;padding:10px;border-radius:8px}
+.game-2048 .cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;border-radius:6px;background:#cdc1b4;color:#776e65;transition:all .15s}
+.game-2048 .cell[data-value="2"]{background:#eee4da}
+.game-2048 .cell[data-value="4"]{background:#ede0c8}
+.game-2048 .cell[data-value="8"]{background:#f2b179;color:#f9f6f2}
+.game-2048 .cell[data-value="16"]{background:#f59563;color:#f9f6f2}
+.game-2048 .cell[data-value="32"]{background:#f67c5f;color:#f9f6f2}
+.game-2048 .cell[data-value="64"]{background:#f65e3b;color:#f9f6f2}
+.game-2048 .cell[data-value="128"]{background:#edcf72;color:#f9f6f2;font-size:24px}
+.game-2048 .cell[data-value="256"]{background:#edcc61;color:#f9f6f2;font-size:24px}
+.game-2048 .cell[data-value="512"]{background:#edc850;color:#f9f6f2;font-size:24px}
+.game-2048 .cell[data-value="1024"]{background:#edc53f;color:#f9f6f2;font-size:20px}
+.game-2048 .cell[data-value="2048"]{background:#edc22e;color:#f9f6f2;font-size:20px}
+.game-2048 .restart-btn{width:100%;margin-top:16px;padding:12px;background:#8f7a66;color:#fff;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer}
+/* Snake styles */
+.game-snake{background:#1a1a2e;padding:20px;border-radius:12px}
+.game-snake .snake-header{display:flex;justify-content:space-between;margin-bottom:12px;color:#fff}
+.game-snake canvas{display:block;border-radius:8px}
+.game-snake .controls{display:grid;grid-template-columns:repeat(3,60px);gap:8px;margin-top:16px;justify-content:center}
+.game-snake .controls button{padding:12px;background:#2d2d44;border:none;color:#fff;border-radius:8px;font-size:20px;cursor:pointer}
+.game-snake .controls button:active{background:#3d3d54}
+/* Memory styles */
+.game-memory{background:#1a1a2e;padding:20px;border-radius:12px}
+.game-memory .memory-header{display:flex;justify-content:space-between;margin-bottom:16px;color:#fff}
+.game-memory .memory-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:340px}
+.game-memory .memory-card{aspect-ratio:1;background:#2d2d44;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:32px;transition:all .3s;transform-style:preserve-3d}
+.game-memory .memory-card.flipped{background:#6366f1;transform:rotateY(180deg)}
+.game-memory .memory-card.matched{background:#10b981}
+.game-memory .memory-card .front{display:none}
+.game-memory .memory-card.flipped .front,.game-memory .memory-card.matched .front{display:block}
+.game-memory .restart-btn{width:100%;margin-top:16px;padding:12px;background:#6366f1;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer}
+/* Minesweeper */
+.game-mines{background:#c0c0c0;padding:12px;border-radius:8px;border:3px outset #fff}
+.game-mines .mines-header{display:flex;justify-content:space-between;align-items:center;background:#c0c0c0;padding:8px;margin-bottom:8px;border:2px inset #808080}
+.game-mines .counter{background:#000;color:#f00;font-family:monospace;font-size:24px;padding:4px 8px;min-width:60px;text-align:center}
+.game-mines .face-btn{font-size:24px;cursor:pointer;background:#c0c0c0;border:2px outset #fff;padding:4px 8px}
+.game-mines .mines-grid{display:grid;gap:0;border:3px inset #808080}
+.game-mines .mine-cell{width:24px;height:24px;border:2px outset #fff;background:#c0c0c0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.game-mines .mine-cell.revealed{border:1px solid #808080;background:#c0c0c0}
+.game-mines .mine-cell.mine{background:#f00}
+.game-mines .mine-cell[data-n="1"]{color:#0000ff}
+.game-mines .mine-cell[data-n="2"]{color:#008000}
+.game-mines .mine-cell[data-n="3"]{color:#ff0000}
+.game-mines .mine-cell[data-n="4"]{color:#000080}
+.game-mines .mine-cell[data-n="5"]{color:#800000}
+/* Tetris */
+.game-tetris{background:#111;padding:20px;border-radius:12px;display:flex;gap:20px}
+.game-tetris canvas{border:2px solid #333;border-radius:4px}
+.game-tetris .side-panel{color:#fff;width:120px}
+.game-tetris .side-panel h4{margin-bottom:8px;color:#888}
+.game-tetris .side-panel .score{font-size:24px;margin-bottom:20px}
+.game-tetris .next-piece{background:#222;padding:10px;border-radius:8px;margin-bottom:16px}
+.game-tetris .next-piece canvas{display:block;margin:0 auto}
+.game-tetris .controls-info{font-size:12px;color:#666;line-height:1.8}
+</style></head><body>
+<div class="container">
+<div class="header"><h1>&#127918; GameHub</h1><p>Chon game de choi</p></div>
+<div class="games-grid">
+<div class="game-card" onclick="openGame('2048')" style="--c1:#f093fb;--c2:#f5576c">
+<div class="game-preview">&#127922;</div>
+<div class="game-info"><h3>2048</h3><p>Ghep so, dat 2048!</p></div>
+</div>
+<div class="game-card" onclick="openGame('snake')" style="--c1:#4facfe;--c2:#00f2fe">
+<div class="game-preview">&#128013;</div>
+<div class="game-info"><h3>Snake</h3><p>Ran san moi co dien</p></div>
+</div>
+<div class="game-card" onclick="openGame('memory')" style="--c1:#43e97b;--c2:#38f9d7">
+<div class="game-preview">&#129504;</div>
+<div class="game-info"><h3>Memory</h3><p>Tim cap the giong nhau</p></div>
+</div>
+<div class="game-card" onclick="openGame('minesweeper')" style="--c1:#fa709a;--c2:#fee140">
+<div class="game-preview">&#128163;</div>
+<div class="game-info"><h3>Minesweeper</h3><p>Do min kinh dien</p></div>
+</div>
+<div class="game-card" onclick="openGame('tetris')" style="--c1:#a18cd1;--c2:#fbc2eb">
+<div class="game-preview">&#129513;</div>
+<div class="game-info"><h3>Tetris</h3><p>Xep gach huyen thoai</p></div>
+</div>
+<div class="game-card" onclick="window.parent.postMessage({openApp:'balatro'},'*')" style="--c1:#ff6b6b;--c2:#feca57">
+<div class="game-preview">&#127183;</div>
+<div class="game-info"><h3>Balatro</h3><p>Poker roguelike</p></div>
+</div>
+</div>
+</div>
+
+<div class="game-modal" id="gameModal">
+<div class="modal-header">
+<h2 id="gameTitle">Game</h2>
+<button class="close-btn" onclick="closeGame()">&times;</button>
+</div>
+<div class="modal-body">
+<div class="game-frame" id="gameFrame"></div>
+</div>
+</div>
+
+<script>
+// Game Manager
+function openGame(game){
+document.getElementById('gameModal').classList.add('active');
+document.getElementById('gameTitle').textContent=game.charAt(0).toUpperCase()+game.slice(1);
+var frame=document.getElementById('gameFrame');
+frame.innerHTML='';
+if(game==='2048')init2048(frame);
+else if(game==='snake')initSnake(frame);
+else if(game==='memory')initMemory(frame);
+else if(game==='minesweeper')initMinesweeper(frame);
+else if(game==='tetris')initTetris(frame);
+}
+function closeGame(){
+document.getElementById('gameModal').classList.remove('active');
+document.getElementById('gameFrame').innerHTML='';
+if(window.gameInterval)clearInterval(window.gameInterval);
+}
+document.addEventListener('keydown',function(e){
+if(e.key==='Escape')closeGame();
+});
+
+// ===== 2048 =====
+function init2048(container){
+var g={grid:[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],score:0};
+var html='<div class="game-2048"><div class="score-board"><div class="score-box"><span>SCORE</span><strong id="score2048">0</strong></div><div class="score-box"><span>BEST</span><strong id="best2048">'+(localStorage.getItem('best2048')||0)+'</strong></div></div><div class="grid-2048" id="grid2048"></div><button class="restart-btn" onclick="init2048(this.parentElement.parentElement)">New Game</button></div>';
+container.innerHTML=html;
+function addTile(){var empty=[];for(var i=0;i<4;i++)for(var j=0;j<4;j++)if(g.grid[i][j]===0)empty.push([i,j]);if(empty.length){var[r,c]=empty[Math.floor(Math.random()*empty.length)];g.grid[r][c]=Math.random()<0.9?2:4;}}
+function render(){var grid=document.getElementById('grid2048');grid.innerHTML='';for(var i=0;i<4;i++)for(var j=0;j<4;j++){var cell=document.createElement('div');cell.className='cell';cell.dataset.value=g.grid[i][j];cell.textContent=g.grid[i][j]||'';grid.appendChild(cell);}document.getElementById('score2048').textContent=g.score;var best=parseInt(localStorage.getItem('best2048')||0);if(g.score>best){localStorage.setItem('best2048',g.score);document.getElementById('best2048').textContent=g.score;}}
+function move(dir){var moved=false,newGrid=JSON.parse(JSON.stringify(g.grid));function slide(row){var arr=row.filter(x=>x);for(var i=0;i<arr.length-1;i++)if(arr[i]===arr[i+1]){arr[i]*=2;g.score+=arr[i];arr.splice(i+1,1);}while(arr.length<4)arr.push(0);return arr;}
+if(dir==='left')for(var i=0;i<4;i++)newGrid[i]=slide(newGrid[i]);
+else if(dir==='right')for(var i=0;i<4;i++)newGrid[i]=slide(newGrid[i].reverse()).reverse();
+else if(dir==='up')for(var j=0;j<4;j++){var col=[newGrid[0][j],newGrid[1][j],newGrid[2][j],newGrid[3][j]];col=slide(col);for(var i=0;i<4;i++)newGrid[i][j]=col[i];}
+else if(dir==='down')for(var j=0;j<4;j++){var col=[newGrid[3][j],newGrid[2][j],newGrid[1][j],newGrid[0][j]];col=slide(col);for(var i=0;i<4;i++)newGrid[3-i][j]=col[i];}
+for(var i=0;i<4;i++)for(var j=0;j<4;j++)if(newGrid[i][j]!==g.grid[i][j])moved=true;
+if(moved){g.grid=newGrid;addTile();render();}}
+addTile();addTile();render();
+document.onkeydown=function(e){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();var dirs={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};move(dirs[e.key]);}};
+}
+
+// ===== Snake =====
+function initSnake(container){
+var html='<div class="game-snake"><div class="snake-header"><span>Score: <span id="snakeScore">0</span></span><span>Best: <span id="snakeBest">'+(localStorage.getItem('snakeBest')||0)+'</span></span></div><canvas id="snakeCanvas" width="320" height="320"></canvas><div class="controls"><button onclick="snakeDir=\'up\'">&#9650;</button><div></div><div></div><button onclick="snakeDir=\'left\'">&#9664;</button><button onclick="initSnake(this.closest(\\\'.game-snake\\\').parentElement)">&#8635;</button><button onclick="snakeDir=\'right\'">&#9654;</button><div></div><button onclick="snakeDir=\'down\'">&#9660;</button><div></div></div></div>';
+container.innerHTML=html;
+var canvas=document.getElementById('snakeCanvas'),ctx=canvas.getContext('2d');
+var size=20,snake=[{x:8,y:8}],food={x:12,y:8},score=0;
+window.snakeDir='right';var nextDir='right';
+function draw(){ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,320,320);ctx.fillStyle='#f5576c';ctx.beginPath();ctx.arc(food.x*size+size/2,food.y*size+size/2,size/2-2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4facfe';snake.forEach(function(s,i){ctx.fillRect(s.x*size+1,s.y*size+1,size-2,size-2);});}
+function update(){nextDir=window.snakeDir;var head={x:snake[0].x,y:snake[0].y};if(nextDir==='up')head.y--;else if(nextDir==='down')head.y++;else if(nextDir==='left')head.x--;else if(nextDir==='right')head.x++;
+if(head.x<0||head.x>=16||head.y<0||head.y>=16||snake.some(function(s){return s.x===head.x&&s.y===head.y;})){var best=parseInt(localStorage.getItem('snakeBest')||0);if(score>best)localStorage.setItem('snakeBest',score);snake=[{x:8,y:8}];window.snakeDir='right';score=0;food={x:Math.floor(Math.random()*16),y:Math.floor(Math.random()*16)};document.getElementById('snakeScore').textContent=0;document.getElementById('snakeBest').textContent=localStorage.getItem('snakeBest')||0;return;}
+snake.unshift(head);if(head.x===food.x&&head.y===food.y){score++;document.getElementById('snakeScore').textContent=score;do{food={x:Math.floor(Math.random()*16),y:Math.floor(Math.random()*16)};}while(snake.some(function(s){return s.x===food.x&&s.y===food.y;}));}else{snake.pop();}}
+function loop(){update();draw();}
+if(window.gameInterval)clearInterval(window.gameInterval);
+window.gameInterval=setInterval(loop,120);
+document.onkeydown=function(e){var dirs={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};if(dirs[e.key]){e.preventDefault();var opp={up:'down',down:'up',left:'right',right:'left'};if(dirs[e.key]!==opp[nextDir])window.snakeDir=dirs[e.key];}};
+}
+
+// ===== Memory =====
+function initMemory(container){
+var emojis=['&#128054;','&#128049;','&#128059;','&#128048;','&#128053;','&#128055;','&#128056;','&#128058;'];
+var cards=[...emojis,...emojis].sort(function(){return Math.random()-0.5;});
+var html='<div class="game-memory"><div class="memory-header"><span>Moves: <span id="memMoves">0</span></span><span>Pairs: <span id="memPairs">0</span>/8</span></div><div class="memory-grid" id="memGrid"></div><button class="restart-btn" onclick="initMemory(this.parentElement.parentElement)">New Game</button></div>';
+container.innerHTML=html;
+var grid=document.getElementById('memGrid'),flipped=[],moves=0,pairs=0,locked=false;
+cards.forEach(function(emoji,i){var card=document.createElement('div');card.className='memory-card';card.innerHTML='<span class="front">'+emoji+'</span>';card.dataset.idx=i;card.onclick=function(){flipCard(this);};grid.appendChild(card);});
+function flipCard(card){if(locked||card.classList.contains('flipped')||card.classList.contains('matched'))return;card.classList.add('flipped');flipped.push(card);if(flipped.length===2){moves++;document.getElementById('memMoves').textContent=moves;locked=true;setTimeout(checkMatch,600);}}
+function checkMatch(){if(flipped[0].innerHTML===flipped[1].innerHTML){flipped[0].classList.add('matched');flipped[1].classList.add('matched');pairs++;document.getElementById('memPairs').textContent=pairs;if(pairs===8)setTimeout(function(){alert('You won in '+moves+' moves!');},300);}else{flipped[0].classList.remove('flipped');flipped[1].classList.remove('flipped');}flipped=[];locked=false;}
+}
+
+// ===== Minesweeper =====
+function initMinesweeper(container){
+var rows=9,cols=9,mines=10,grid=[],revealed=[],flagged=[],gameOver=false,firstClick=true;
+var html='<div class="game-mines"><div class="mines-header"><div class="counter" id="mineCount">'+mines+'</div><button class="face-btn" id="faceBTN" onclick="initMinesweeper(this.closest(\\\'.game-mines\\\').parentElement)">&#128578;</button><div class="counter" id="timer">000</div></div><div class="mines-grid" id="minesGrid" style="grid-template-columns:repeat('+cols+',24px)"></div></div>';
+container.innerHTML=html;
+for(var i=0;i<rows;i++){grid[i]=[];revealed[i]=[];flagged[i]=[];for(var j=0;j<cols;j++){grid[i][j]=0;revealed[i][j]=false;flagged[i][j]=false;}}
+function placeMines(sr,sc){var placed=0;while(placed<mines){var r=Math.floor(Math.random()*rows),c=Math.floor(Math.random()*cols);if(grid[r][c]!==-1&&!(r===sr&&c===sc)){grid[r][c]=-1;placed++;for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){var nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols&&grid[nr][nc]!==-1)grid[nr][nc]++;}}}}
+function render(){var g=document.getElementById('minesGrid');g.innerHTML='';for(var i=0;i<rows;i++)for(var j=0;j<cols;j++){var cell=document.createElement('div');cell.className='mine-cell';cell.dataset.r=i;cell.dataset.c=j;if(revealed[i][j]){cell.classList.add('revealed');if(grid[i][j]===-1){cell.classList.add('mine');cell.innerHTML='&#128163;';}else if(grid[i][j]>0){cell.textContent=grid[i][j];cell.dataset.n=grid[i][j];}}else if(flagged[i][j]){cell.innerHTML='&#128681;';}cell.onclick=function(e){click(parseInt(this.dataset.r),parseInt(this.dataset.c));};cell.oncontextmenu=function(e){e.preventDefault();flag(parseInt(this.dataset.r),parseInt(this.dataset.c));};g.appendChild(cell);}}
+function click(r,c){if(gameOver||revealed[r][c]||flagged[r][c])return;if(firstClick){firstClick=false;placeMines(r,c);}revealed[r][c]=true;if(grid[r][c]===-1){gameOver=true;document.getElementById('faceBTN').innerHTML='&#128565;';for(var i=0;i<rows;i++)for(var j=0;j<cols;j++)if(grid[i][j]===-1)revealed[i][j]=true;}else if(grid[r][c]===0){for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){var nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols)click(nr,nc);}}checkWin();render();}
+function flag(r,c){if(gameOver||revealed[r][c])return;flagged[r][c]=!flagged[r][c];var cnt=0;for(var i=0;i<rows;i++)for(var j=0;j<cols;j++)if(flagged[i][j])cnt++;document.getElementById('mineCount').textContent=mines-cnt;render();}
+function checkWin(){var unrevealed=0;for(var i=0;i<rows;i++)for(var j=0;j<cols;j++)if(!revealed[i][j]&&grid[i][j]!==-1)unrevealed++;if(unrevealed===0){gameOver=true;document.getElementById('faceBTN').innerHTML='&#128526;';}}
+render();
+}
+
+// ===== Tetris =====
+function initTetris(container){
+var html='<div class="game-tetris"><canvas id="tetrisCanvas" width="200" height="400"></canvas><div class="side-panel"><h4>SCORE</h4><div class="score" id="tetrisScore">0</div><h4>NEXT</h4><div class="next-piece"><canvas id="nextCanvas" width="80" height="80"></canvas></div><div class="controls-info">&#9664; &#9654; Move<br>&#9650; Rotate<br>&#9660; Drop<br>Space Hard Drop</div></div></div>';
+container.innerHTML=html;
+var canvas=document.getElementById('tetrisCanvas'),ctx=canvas.getContext('2d');
+var nextCanvas=document.getElementById('nextCanvas'),nextCtx=nextCanvas.getContext('2d');
+var cols=10,rows=20,size=20,score=0;
+var board=[];for(var i=0;i<rows;i++){board[i]=[];for(var j=0;j<cols;j++)board[i][j]=0;}
+var pieces=[[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[0,1,1],[1,1,0]],[[1,1,0],[0,1,1]]];
+var colors=['#00f0f0','#f0f000','#a000f0','#f0a000','#0000f0','#00f000','#f00000'];
+var current,currentX,currentY,currentColor,next,nextColor;
+function newPiece(){current=next||pieces[Math.floor(Math.random()*pieces.length)];currentColor=nextColor||colors[Math.floor(Math.random()*colors.length)];currentX=3;currentY=0;next=pieces[Math.floor(Math.random()*pieces.length)];nextColor=colors[Math.floor(Math.random()*colors.length)];drawNext();if(collide(current,currentX,currentY)){gameOverTetris();}}
+function collide(piece,px,py){for(var y=0;y<piece.length;y++)for(var x=0;x<piece[y].length;x++)if(piece[y][x]&&(board[py+y]===undefined||board[py+y][px+x]===undefined||board[py+y][px+x]))return true;return false;}
+function merge(){for(var y=0;y<current.length;y++)for(var x=0;x<current[y].length;x++)if(current[y][x])board[currentY+y][currentX+x]=currentColor;}
+function rotate(){var newPiece=[];for(var x=0;x<current[0].length;x++){newPiece[x]=[];for(var y=current.length-1;y>=0;y--)newPiece[x].push(current[y][x]);}if(!collide(newPiece,currentX,currentY))current=newPiece;}
+function clearLines(){var lines=0;for(var y=rows-1;y>=0;y--){var full=true;for(var x=0;x<cols;x++)if(!board[y][x])full=false;if(full){board.splice(y,1);board.unshift(Array(cols).fill(0));lines++;y++;}};if(lines)score+=lines*100;document.getElementById('tetrisScore').textContent=score;}
+function draw(){ctx.fillStyle='#111';ctx.fillRect(0,0,200,400);for(var y=0;y<rows;y++)for(var x=0;x<cols;x++)if(board[y][x]){ctx.fillStyle=board[y][x];ctx.fillRect(x*size+1,y*size+1,size-2,size-2);}if(current)for(var y=0;y<current.length;y++)for(var x=0;x<current[y].length;x++)if(current[y][x]){ctx.fillStyle=currentColor;ctx.fillRect((currentX+x)*size+1,(currentY+y)*size+1,size-2,size-2);}}
+function drawNext(){nextCtx.fillStyle='#222';nextCtx.fillRect(0,0,80,80);if(next)for(var y=0;y<next.length;y++)for(var x=0;x<next[y].length;x++)if(next[y][x]){nextCtx.fillStyle=nextColor;nextCtx.fillRect(x*20+10,y*20+10,18,18);}}
+function drop(){if(!collide(current,currentX,currentY+1)){currentY++;}else{merge();clearLines();newPiece();}draw();}
+function move(dir){if(!collide(current,currentX+dir,currentY))currentX+=dir;draw();}
+function hardDrop(){while(!collide(current,currentX,currentY+1))currentY++;drop();}
+function gameOverTetris(){if(window.gameInterval)clearInterval(window.gameInterval);alert('Game Over! Score: '+score);}
+newPiece();draw();
+if(window.gameInterval)clearInterval(window.gameInterval);
+window.gameInterval=setInterval(drop,500);
+document.onkeydown=function(e){if(e.key==='ArrowLeft'){e.preventDefault();move(-1);}else if(e.key==='ArrowRight'){e.preventDefault();move(1);}else if(e.key==='ArrowUp'){e.preventDefault();rotate();draw();}else if(e.key==='ArrowDown'){e.preventDefault();drop();}else if(e.key===' '){e.preventDefault();hardDrop();}};
+}
+</script>
+</body></html>"""
 
 # ===========================================
 # File Viewer Templates
@@ -5478,6 +6040,12 @@ def embed_screen_share():
     username = session['user']
     return render_template_string(EMBED_SCREEN_SHARE, username=username)
 
+@app.route('/screen-guest')
+def screen_guest():
+    """Guest access page for screen share - no login required"""
+    code = request.args.get('code', '')
+    return render_template_string(EMBED_SCREEN_GUEST, code=code)
+
 @app.route('/embed/music-room')
 def embed_music_room():
     if not session.get('user') or session.get('is_admin'):
@@ -5491,6 +6059,12 @@ def embed_todo():
         return redirect('/')
     username = session['user']
     return render_template_string(EMBED_TODO, username=username)
+
+@app.route('/embed/game-hub')
+def embed_game_hub():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    return render_template_string(EMBED_GAME_HUB)
 
 
 # ===========================================
@@ -9520,6 +10094,7 @@ def api_screen_sessions():
         for s in sessions:
             result.append({
                 '_id': str(s['_id']),
+                'code': s.get('code', ''),
                 'title': s.get('title', 'Screen Share'),
                 'host_user': s.get('host_user', ''),
                 'has_password': bool(s.get('password')),
@@ -9575,6 +10150,12 @@ def api_screen_verify_password():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def generate_screen_code():
+    """Generate 6-char uppercase code for screen share"""
+    import random
+    import string
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
 @socketio.on('start_screen_share')
 def handle_start_screen_share(data):
     """Start a screen share session"""
@@ -9590,9 +10171,15 @@ def handle_start_screen_share(data):
         _init_screen_sessions_collection(db)
 
         session_id = str(uuid.uuid4())[:12]
+        code = generate_screen_code()
+
+        # Ensure code is unique
+        while db.screen_sessions.find_one({'code': code}):
+            code = generate_screen_code()
 
         sess = {
             '_id': session_id,
+            'code': code,
             'host_user': username,
             'title': title,
             'password': generate_password_hash(password) if password else None,
@@ -9605,6 +10192,7 @@ def handle_start_screen_share(data):
 
         emit('screen_session_started', {
             'session_id': session_id,
+            'code': code,
             'title': title
         })
 
@@ -9654,6 +10242,58 @@ def handle_join_screen_session(data):
             if not check_password_hash(sess['password'], password):
                 emit('screen_session_error', {'error': 'Incorrect password'})
                 return
+
+        # Add viewer
+        if username not in sess.get('viewers', []):
+            db.screen_sessions.update_one(
+                {'_id': session_id},
+                {'$addToSet': {'viewers': username}}
+            )
+
+        join_room(f'screen_{session_id}')
+
+        emit('screen_session_joined', {
+            'session_id': session_id,
+            'title': sess.get('title'),
+            'host_user': sess.get('host_user')
+        })
+
+        # Notify host
+        updated = db.screen_sessions.find_one({'_id': session_id})
+        emit('viewer_joined', {
+            'viewer_id': username,
+            'viewers': updated.get('viewers', [])
+        }, room=f'screen_{session_id}')
+
+    except Exception as e:
+        emit('screen_session_error', {'error': str(e)})
+
+@socketio.on('join_screen_by_code')
+def handle_join_screen_by_code(data):
+    """Join screen share by 6-char code"""
+    username = session.get('user') or data.get('guest_name')
+    if not username:
+        emit('screen_session_error', {'error': 'Username required'})
+        return
+
+    code = data.get('code', '').upper()
+    password = data.get('password', '')
+
+    try:
+        db = get_db()
+        sess = db.screen_sessions.find_one({'code': code})
+
+        if not sess:
+            emit('screen_session_error', {'error': 'Invalid code'})
+            return
+
+        # Check password
+        if sess.get('password'):
+            if not check_password_hash(sess['password'], password):
+                emit('screen_session_error', {'error': 'Incorrect password'})
+                return
+
+        session_id = sess['_id']
 
         # Add viewer
         if username not in sess.get('viewers', []):
