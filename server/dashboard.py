@@ -44,8 +44,8 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 # OnlyOffice Configuration
 ONLYOFFICE_URL = os.environ.get('ONLYOFFICE_URL', '/onlyoffice')
 ONLYOFFICE_JWT_SECRET = os.environ.get('ONLYOFFICE_JWT_SECRET', 'jupyterhub_onlyoffice_secret_2024')
-# Internal URL for OnlyOffice to fetch files (Docker gateway -> dashboard)
-ONLYOFFICE_FILE_HOST = os.environ.get('ONLYOFFICE_FILE_HOST', 'http://172.17.0.1:9998')
+# Internal URL for OnlyOffice to fetch files (use public IP for Docker container access)
+ONLYOFFICE_FILE_HOST = os.environ.get('ONLYOFFICE_FILE_HOST', 'http://103.82.39.35:9998')
 
 # Configuration from environment
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
@@ -349,13 +349,16 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .window.show{display:flex}
 .window.minimized{display:none!important}
 .window.snapped{border-radius:0;transition:none}
-.window-header{background:#0f172a;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:move;flex-shrink:0}
-.window-header .icon{font-size:16px}
-.window-header .title{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.window-controls{display:flex;gap:6px}
-.window-controls button{width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;font-size:14px;background:#334155;color:#94a3b8}
-.window-controls button:hover{background:#475569;color:#fff}
-.window-controls .close:hover{background:#ef4444;color:#fff}
+.window-header{background:#0f172a;padding:6px 10px;display:flex;align-items:center;gap:8px;cursor:move;flex-shrink:0}
+.window-header .icon{font-size:14px}
+.window-header .title{flex:1;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.window-controls{display:flex;gap:8px;align-items:center}
+.window-controls button{width:12px;height:12px;border:none;border-radius:50%;cursor:pointer;font-size:0;padding:0;transition:all .15s}
+.window-controls .minimize{background:#f59e0b}
+.window-controls .maximize{background:#22c55e}
+.window-controls .close{background:#ef4444}
+.window-controls button:hover{transform:scale(1.15);filter:brightness(1.1)}
+.window-controls button:active{transform:scale(0.95)}
 .window-body{flex:1;overflow:auto;background:#0f172a}
 .window-body iframe{width:100%;height:100%;border:none}
 .resize-handle{position:absolute;background:transparent;z-index:10}
@@ -368,13 +371,13 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .resize-se{bottom:0;right:0;width:12px;height:12px;cursor:se-resize}
 .resize-sw{bottom:0;left:0;width:12px;height:12px;cursor:sw-resize}
 .snap-preview{position:fixed;background:rgba(99,102,241,.3);border:2px solid #6366f1;border-radius:4px;z-index:9998;display:none;pointer-events:none;transition:all .15s}
-.snap-divider{position:fixed;background:transparent;z-index:9997;display:none}
-.snap-divider::after{content:'';position:absolute;background:#475569;transition:background .15s}
+.snap-divider{position:fixed;background:transparent;z-index:500;display:none}
+.snap-divider::after{content:'';position:absolute;background:#475569;opacity:0;transition:opacity .15s,background .15s}
 .snap-divider.vertical{width:8px;cursor:ew-resize}
 .snap-divider.vertical::after{left:3px;top:0;width:2px;height:100%}
 .snap-divider.horizontal{height:8px;cursor:ns-resize}
 .snap-divider.horizontal::after{top:3px;left:0;height:2px;width:100%}
-.snap-divider:hover::after{background:#6366f1}
+.snap-divider:hover::after{opacity:1;background:#6366f1}
 </style>
 </head><body>
 <div class="desktop">
@@ -431,7 +434,7 @@ function createWindow(id){
     el.className='window';el.id='win-'+id;el.dataset.app=id;
     const off=Object.keys(wins).length*30;
     el.style.cssText=`left:${100+off}px;top:${50+off}px;width:${app.w}px;height:${app.h}px;`;
-    el.innerHTML=`<div class="window-header" onmousedown="startDrag(event,'${id}')"><span class="icon">${app.icon}</span><span class="title">${app.title}</span><div class="window-controls"><button onclick="minimizeWin('${id}')" title="Minimize">&#8211;</button><button onclick="toggleMax('${id}')" title="Maximize">&#9633;</button><button class="close" onclick="closeWin('${id}')" title="Close">&#10005;</button></div></div><div class="window-body"><iframe src="${app.url}"></iframe></div><div class="resize-handle resize-n" onmousedown="startResize(event,'${id}','n')"></div><div class="resize-handle resize-s" onmousedown="startResize(event,'${id}','s')"></div><div class="resize-handle resize-e" onmousedown="startResize(event,'${id}','e')"></div><div class="resize-handle resize-w" onmousedown="startResize(event,'${id}','w')"></div><div class="resize-handle resize-ne" onmousedown="startResize(event,'${id}','ne')"></div><div class="resize-handle resize-nw" onmousedown="startResize(event,'${id}','nw')"></div><div class="resize-handle resize-se" onmousedown="startResize(event,'${id}','se')"></div><div class="resize-handle resize-sw" onmousedown="startResize(event,'${id}','sw')"></div>`;
+    el.innerHTML=`<div class="window-header" onmousedown="startDrag(event,'${id}')"><span class="icon">${app.icon}</span><span class="title">${app.title}</span><div class="window-controls"><button class="close" onclick="closeWin('${id}')" title="Close"></button><button class="minimize" onclick="minimizeWin('${id}')" title="Minimize"></button><button class="maximize" onclick="toggleMax('${id}')" title="Maximize"></button></div></div><div class="window-body"><iframe src="${app.url}"></iframe></div><div class="resize-handle resize-n" onmousedown="startResize(event,'${id}','n')"></div><div class="resize-handle resize-s" onmousedown="startResize(event,'${id}','s')"></div><div class="resize-handle resize-e" onmousedown="startResize(event,'${id}','e')"></div><div class="resize-handle resize-w" onmousedown="startResize(event,'${id}','w')"></div><div class="resize-handle resize-ne" onmousedown="startResize(event,'${id}','ne')"></div><div class="resize-handle resize-nw" onmousedown="startResize(event,'${id}','nw')"></div><div class="resize-handle resize-se" onmousedown="startResize(event,'${id}','se')"></div><div class="resize-handle resize-sw" onmousedown="startResize(event,'${id}','sw')"></div>`;
     document.getElementById('windows-container').appendChild(el);
     wins[id]={el,snap:null,restore:null};
     updateTaskbar();
@@ -449,16 +452,16 @@ function openFileViewer(source,path,filename){
     el.className='window';el.id='win-'+id;el.dataset.app=id;el.dataset.fileviewer='1';
     const off=Object.keys(wins).length*30;
     el.style.cssText='left:'+(100+off)+'px;top:'+(50+off)+'px;width:900px;height:600px;';
-    el.innerHTML='<div class="window-header" onmousedown="startDrag(event,\\''+id+'\\')"><span class="icon">'+icon+'</span><span class="title">'+filename+'</span><div class="window-controls"><button onclick="minimizeWin(\\''+id+'\\')">&#8211;</button><button onclick="toggleMax(\\''+id+'\\')">&#9633;</button><button class="close" onclick="closeWin(\\''+id+'\\')">&#10005;</button></div></div><div class="window-body"><iframe src="'+url+'"></iframe></div><div class="resize-handle resize-n" onmousedown="startResize(event,\\''+id+'\\',\\'n\\')"></div><div class="resize-handle resize-s" onmousedown="startResize(event,\\''+id+'\\',\\'s\\')"></div><div class="resize-handle resize-e" onmousedown="startResize(event,\\''+id+'\\',\\'e\\')"></div><div class="resize-handle resize-w" onmousedown="startResize(event,\\''+id+'\\',\\'w\\')"></div><div class="resize-handle resize-ne" onmousedown="startResize(event,\\''+id+'\\',\\'ne\\')"></div><div class="resize-handle resize-nw" onmousedown="startResize(event,\\''+id+'\\',\\'nw\\')"></div><div class="resize-handle resize-se" onmousedown="startResize(event,\\''+id+'\\',\\'se\\')"></div><div class="resize-handle resize-sw" onmousedown="startResize(event,\\''+id+'\\',\\'sw\\')"></div>';
+    el.innerHTML='<div class="window-header" onmousedown="startDrag(event,\\''+id+'\\')"><span class="icon">'+icon+'</span><span class="title">'+filename+'</span><div class="window-controls"><button class="close" onclick="closeWin(\\''+id+'\\')"></button><button class="minimize" onclick="minimizeWin(\\''+id+'\\')"></button><button class="maximize" onclick="toggleMax(\\''+id+'\\')"></button></div></div><div class="window-body"><iframe src="'+url+'"></iframe></div><div class="resize-handle resize-n" onmousedown="startResize(event,\\''+id+'\\',\\'n\\')"></div><div class="resize-handle resize-s" onmousedown="startResize(event,\\''+id+'\\',\\'s\\')"></div><div class="resize-handle resize-e" onmousedown="startResize(event,\\''+id+'\\',\\'e\\')"></div><div class="resize-handle resize-w" onmousedown="startResize(event,\\''+id+'\\',\\'w\\')"></div><div class="resize-handle resize-ne" onmousedown="startResize(event,\\''+id+'\\',\\'ne\\')"></div><div class="resize-handle resize-nw" onmousedown="startResize(event,\\''+id+'\\',\\'nw\\')"></div><div class="resize-handle resize-se" onmousedown="startResize(event,\\''+id+'\\',\\'se\\')"></div><div class="resize-handle resize-sw" onmousedown="startResize(event,\\''+id+'\\',\\'sw\\')"></div>';
     document.getElementById('windows-container').appendChild(el);
     APPS[id]={title:filename,icon:icon,url:url,w:900,h:600,isFile:true};
     wins[id]={el,snap:null,restore:null};
-    el.classList.add('show');focusWin(id);updateTaskbar();
+    el.classList.add('show');focusWin(id);updateDividers();updateTaskbar();
 }
 function closeWin(id){const w=wins[id];if(!w)return;w.el.remove();delete wins[id];if(APPS[id]&&APPS[id].isFile)delete APPS[id];updateDividers();updateTaskbar();}
-function minimizeWin(id){const w=wins[id];if(!w)return;w.el.classList.add('minimized');updateTaskbar();}
+function minimizeWin(id){const w=wins[id];if(!w)return;w.el.classList.add('minimized');updateDividers();updateTaskbar();}
 function toggleMax(id){const w=wins[id];if(!w)return;if(w.snap){unsnap(id);}else{w.restore={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};applySnap(id,'max');}}
-function focusWin(id){Object.values(wins).forEach(w=>w.el.classList.remove('active'));const w=wins[id];if(w){w.el.classList.add('active');w.el.style.zIndex=++zIdx;}updateTaskbar();}
+function focusWin(id){Object.values(wins).forEach(w=>w.el.classList.remove('active'));const w=wins[id];if(w){w.el.classList.add('active');w.el.style.zIndex=++zIdx;}updateDividers();updateTaskbar();}
 function updateTaskbar(){const c=document.getElementById('taskbar-apps');c.innerHTML='';Object.keys(wins).forEach(id=>{const w=wins[id],app=APPS[id],b=document.createElement('button');b.className='taskbar-item'+(w.el.classList.contains('active')&&!w.el.classList.contains('minimized')?' active':'');b.innerHTML='<span>'+app.icon+'</span> '+app.title;b.onclick=()=>{if(w.el.classList.contains('minimized'))openWindow(id);else if(w.el.classList.contains('active'))minimizeWin(id);else focusWin(id);};c.appendChild(b);});}
 
 // Snap system
@@ -494,12 +497,17 @@ function showSnapPreview(zone){
 }
 function updateSnappedWindows(){Object.keys(wins).forEach(id=>{const w=wins[id];if(w.snap)applySnap(id,w.snap);});}
 function updateDividers(){
-    const snapped=Object.values(wins).filter(w=>w.snap&&w.snap!=='max');
+    const dv=document.getElementById('snap-divider-v'),dh=document.getElementById('snap-divider-h');
+    // Only consider visible (non-minimized) windows
+    const visible=Object.values(wins).filter(w=>!w.el.classList.contains('minimized'));
+    // Hide dividers if there's a floating (non-snapped) visible window
+    const hasFloating=visible.some(w=>!w.snap);
+    if(hasFloating){dv.style.display='none';dh.style.display='none';return;}
+    const snapped=visible.filter(w=>w.snap&&w.snap!=='max');
     const hasLeft=snapped.some(w=>w.snap.includes('left'));
     const hasRight=snapped.some(w=>w.snap.includes('right'));
     const hasTop=snapped.some(w=>w.snap==='top'||w.snap==='top-left'||w.snap==='top-right');
     const hasBottom=snapped.some(w=>w.snap==='bottom'||w.snap==='bottom-left'||w.snap==='bottom-right');
-    const dv=document.getElementById('snap-divider-v'),dh=document.getElementById('snap-divider-h');
     if(hasLeft&&hasRight){dv.className='snap-divider vertical';dv.style.cssText=`display:block;left:${maxW()*splitV/100-4}px;top:0;height:${maxH()}px;`;}else{dv.style.display='none';}
     if(hasTop&&hasBottom){dh.className='snap-divider horizontal';dh.style.cssText=`display:block;top:${maxH()*splitH/100-4}px;left:0;width:${maxW()}px;`;}else{dh.style.display='none';}
 }
@@ -2299,7 +2307,7 @@ VIEWER_OFFICE = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
 </head><body>
 <div class="viewer-container">
     <div class="viewer-header">
-        <span class="icon">{{ icon }}</span>
+        <span class="icon">{{ icon|safe }}</span>
         <span class="filename">{{ filename }}</span>
         <a href="{{ download_url }}" class="btn btn-primary" download><span>&#11015;</span> Download</a>
     </div>
@@ -2312,10 +2320,27 @@ VIEWER_OFFICE = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
 <script>
 var config = {{ config_json|safe }};
 config.events = {
-    onDocumentReady: function() { console.log('Document ready'); },
-    onError: function(e) { console.error('OnlyOffice error:', e); }
+    onAppReady: function() { console.log('OnlyOffice App ready'); },
+    onDocumentReady: function() {
+        console.log('Document ready');
+        document.querySelector('.loading-office').style.display = 'none';
+    },
+    onError: function(e) {
+        console.error('OnlyOffice error:', e);
+        var errMsg = e.data ? (typeof e.data === 'string' ? e.data : JSON.stringify(e.data)) : 'Unknown error';
+        var errCode = e.data && e.data.errorCode ? ' (code: ' + e.data.errorCode + ')' : '';
+        document.querySelector('.loading-office').innerHTML = '<div style="color:#ef4444;font-size:16px">Error: ' + errMsg + errCode + '</div><p style="margin-top:20px"><a href="{{ download_url }}" class="btn btn-primary" download>Download instead</a></p>';
+    },
+    onWarning: function(e) { console.warn('OnlyOffice warning:', e); },
+    onDownloadAs: function(e) { console.log('Download:', e); }
 };
-new DocsAPI.DocEditor("onlyoffice-container", config);
+console.log('OnlyOffice config:', config);
+try {
+    new DocsAPI.DocEditor("onlyoffice-container", config);
+} catch(err) {
+    console.error('DocsAPI error:', err);
+    document.querySelector('.loading-office').innerHTML = '<div style="color:#ef4444">Failed to load editor: ' + err.message + '</div>';
+}
 </script>
 </body></html>"""
 
@@ -3339,7 +3364,7 @@ def generate_onlyoffice_token(source, path, username):
         'source': source,
         'path': path,
         'username': username,
-        'exp': int(time.time()) + 3600  # 1 hour expiry
+        'exp': int(time.time()) + 14400  # 4 hour expiry
     }
     return jwt.encode(payload, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
 
@@ -3355,9 +3380,21 @@ def verify_onlyoffice_token(token):
         return None
 
 
-@app.route('/api/onlyoffice/file')
+@app.route('/api/onlyoffice/file', methods=['GET', 'HEAD', 'OPTIONS'])
 def onlyoffice_file_stream():
     """Stream file for OnlyOffice (token-based auth)"""
+    # Handle OPTIONS preflight
+    if request.method == 'OPTIONS':
+        return Response('', headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range',
+            'Access-Control-Max-Age': '86400',
+        })
+
+    # Log request headers for debugging
+    app.logger.info(f"OnlyOffice file request: {request.method} - headers: {dict(request.headers)}")
+
     token = request.args.get('token', '')
     payload = verify_onlyoffice_token(token)
     if not payload:
@@ -3397,9 +3434,13 @@ def onlyoffice_file_stream():
             'Content-Type': ctype,
             'Content-Length': length,
             'Content-Disposition': f'inline; filename="{fname}"',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         }
         return Response(gen, headers=headers)
     except Exception as e:
+        app.logger.error(f"OnlyOffice file error: {e}")
         return str(e), 500
 
 
@@ -3658,6 +3699,12 @@ def file_viewer(source):
                 "key": hashlib.md5(f"{source}:{path}:{time.time()//300}".encode()).hexdigest()[:20],
                 "title": filename,
                 "url": file_url_full,
+                "permissions": {
+                    "download": True,
+                    "print": True,
+                    "copy": True,
+                    "edit": False,
+                }
             },
             "documentType": doc_type,
             "editorConfig": {
@@ -3668,14 +3715,15 @@ def file_viewer(source):
                     "hideRightMenu": True,
                     "compactHeader": True,
                     "toolbarNoTabs": True,
+                    "compactToolbar": True,
                 }
             },
             "height": "100%",
             "width": "100%",
         }
-        # Sign with JWT for OnlyOffice API
-        token = jwt.encode(config, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
-        config['token'] = token
+        # Sign with JWT for OnlyOffice API (disabled when JWT_ENABLED=false)
+        # token = jwt.encode(config, ONLYOFFICE_JWT_SECRET, algorithm='HS256')
+        # config['token'] = token
         return render_template_string(VIEWER_OFFICE, filename=filename, icon=icon, download_url=download_url,
                                       onlyoffice_url=ONLYOFFICE_URL, config_json=json.dumps(config))
     else:
