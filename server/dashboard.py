@@ -2378,7 +2378,8 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 .contact-item .pending-badge{font-size:10px;color:#f59e0b}
 .contact-item .actions{display:flex;gap:4px}
 .contact-item .actions button{padding:4px 8px;font-size:11px;border-radius:4px;border:none;cursor:pointer}
-.chat-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.chat-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#chat-area{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .chat-header{padding:12px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;gap:12px}
 .chat-header .avatar{width:40px;height:40px;background:#334155;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
 .chat-header .info{flex:1}
@@ -2386,7 +2387,7 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 .chat-header .status{font-size:12px;color:#94a3b8}
 .chat-header .header-actions button{background:transparent;border:1px solid #334155;color:#94a3b8;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 .chat-header .header-actions button:hover{background:#334155;color:#fff}
-.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:0}
 .message{max-width:70%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.4}
 .message.sent{background:#6366f1;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 .message.received{background:#334155;align-self:flex-start;border-bottom-left-radius:4px}
@@ -2405,7 +2406,7 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 .chat-input .send-btn{background:#6366f1;border:none;color:#fff;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500}
 .chat-input .send-btn:hover{background:#4f46e5}
 .chat-input .send-btn:disabled{background:#334155;cursor:not-allowed}
-.no-chat{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center}
+.no-chat{display:flex;align-items:center;justify-content:center;flex:1;color:#64748b;text-align:center}
 .no-chat .icon{font-size:60px;margin-bottom:16px;opacity:0.5}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal-overlay.show{display:flex}
@@ -2427,7 +2428,7 @@ EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 .upload-progress .bar-fill{height:100%;background:#6366f1;transition:width .3s}
 </style>
 </head><body>
-<div class="container" style="padding:12px;height:100vh;overflow:hidden">
+<div class="container" style="padding:12px;height:100vh;overflow:hidden;box-sizing:border-box">
     <div class="chat-container">
         <div class="sidebar">
             <div class="sidebar-header">
