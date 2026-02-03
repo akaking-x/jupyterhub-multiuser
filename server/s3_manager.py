@@ -6,8 +6,11 @@ Handles S3 operations, workspace browsing, and file transfers
 """
 
 import os
+import io
 import uuid
+import mimetypes
 import threading
+import zipfile
 from datetime import datetime
 
 import boto3
@@ -21,7 +24,7 @@ WORKSPACE_ROOT = '/home'
 
 
 def get_s3_config(db, username):
-    """Get S3 config for user: personal first, then system fallback"""
+    """Get S3 config for user: personal first, then system fallback with user prefix"""
     # Check personal config
     user_cfg = db.s3_user_config.find_one({'username': username})
     if user_cfg and user_cfg.get('endpoint_url'):
@@ -34,16 +37,19 @@ def get_s3_config(db, username):
             'prefix': user_cfg.get('prefix', ''),
             'source': 'personal',
         }
-    # Fallback to system config
+    # Fallback to system config - add username as prefix for isolation
     sys_cfg = db.s3_system_config.find_one({'_id': 'default'})
     if sys_cfg and sys_cfg.get('endpoint_url'):
+        base_prefix = sys_cfg.get('prefix', '').strip('/')
+        # Each user gets their own folder: {base_prefix}/{username}/
+        user_prefix = f"{base_prefix}/{username}" if base_prefix else username
         return {
             'endpoint_url': sys_cfg['endpoint_url'],
             'access_key': sys_cfg['access_key'],
             'secret_key': sys_cfg['secret_key'],
             'region': sys_cfg.get('region', ''),
             'bucket_name': sys_cfg['bucket_name'],
-            'prefix': sys_cfg.get('prefix', ''),
+            'prefix': user_prefix,
             'source': 'system',
         }
     return None
@@ -149,6 +155,63 @@ def delete_workspace(username, items, base_path=''):
     return deleted
 
 
+def upload_to_workspace(username, rel_path, filename, file_stream):
+    """Upload a file directly to workspace from HTTP upload"""
+    target_dir = _safe_workspace_path(username, rel_path)
+    if not target_dir:
+        return False, "Invalid path"
+    os.makedirs(target_dir, exist_ok=True)
+    # Sanitize filename
+    safe_name = os.path.basename(filename)
+    if not safe_name:
+        return False, "Invalid filename"
+    full_path = os.path.join(target_dir, safe_name)
+    # Verify still within workspace
+    if not full_path.startswith(os.path.realpath(os.path.join(WORKSPACE_ROOT, username, 'workspace'))):
+        return False, "Path traversal detected"
+    try:
+        file_stream.save(full_path)
+        return True, safe_name
+    except Exception as e:
+        return False, str(e)
+
+
+def stream_workspace_file(username, rel_path, chunk_size=1024*1024):
+    """Stream a file from workspace. Returns (generator, content_length, content_type, filename) or None."""
+    full = _safe_workspace_path(username, rel_path)
+    if not full or not os.path.isfile(full):
+        return None
+    content_length = os.path.getsize(full)
+    content_type, _ = mimetypes.guess_type(full)
+    if not content_type:
+        content_type = 'application/octet-stream'
+    filename = os.path.basename(full)
+
+    def generate():
+        with open(full, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+    return generate(), content_length, content_type, filename
+
+
+def read_workspace_text(username, rel_path, max_size=5*1024*1024):
+    """Read text file from workspace, return content string or None. Max 5MB."""
+    full = _safe_workspace_path(username, rel_path)
+    if not full or not os.path.isfile(full):
+        return None
+    if os.path.getsize(full) > max_size:
+        return None
+    try:
+        with open(full, 'r', encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except:
+        return None
+
+
 # ==========================================
 # S3 operations
 # ==========================================
@@ -224,6 +287,146 @@ def delete_s3(config, items, base_path=''):
                 client.delete_object(Bucket=bucket, Key=obj['Key'])
         deleted.append(item)
     return deleted
+
+
+def upload_to_s3(config, rel_path, filename, file_data):
+    """Upload a file directly to S3 from HTTP upload"""
+    client = get_s3_client(config)
+    bucket = config['bucket_name']
+    base_prefix = config.get('prefix', '').strip('/')
+    # Sanitize filename
+    safe_name = os.path.basename(filename)
+    if not safe_name:
+        return False, "Invalid filename"
+    # Build S3 key
+    if base_prefix:
+        s3_key = f"{base_prefix}/{rel_path}/{safe_name}" if rel_path else f"{base_prefix}/{safe_name}"
+    else:
+        s3_key = f"{rel_path}/{safe_name}" if rel_path else safe_name
+    s3_key = s3_key.lstrip('/')
+    try:
+        client.put_object(Bucket=bucket, Key=s3_key, Body=file_data)
+        return True, safe_name
+    except Exception as e:
+        return False, str(e)
+
+
+# ==========================================
+# Shared S3 space
+# ==========================================
+
+def get_shared_s3_config(db):
+    """Get system S3 config with _shared/ prefix for shared space"""
+    sys_cfg = db.s3_system_config.find_one({'_id': 'default'})
+    if not sys_cfg or not sys_cfg.get('endpoint_url'):
+        return None
+    base_prefix = sys_cfg.get('prefix', '').strip('/')
+    shared_prefix = f"{base_prefix}/_shared" if base_prefix else '_shared'
+    return {
+        'endpoint_url': sys_cfg['endpoint_url'],
+        'access_key': sys_cfg['access_key'],
+        'secret_key': sys_cfg['secret_key'],
+        'region': sys_cfg.get('region', ''),
+        'bucket_name': sys_cfg['bucket_name'],
+        'prefix': shared_prefix,
+        'source': 'shared',
+    }
+
+
+def list_s3_recursive(config_snapshot, s3_key_prefix):
+    """List all objects recursively under a prefix (for folder share)"""
+    client = get_s3_client(config_snapshot)
+    bucket = config_snapshot['bucket_name']
+    prefix = s3_key_prefix.rstrip('/') + '/' if s3_key_prefix else ''
+    items = []
+    paginator = client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get('Contents', []):
+            rel = obj['Key'][len(prefix):]
+            if rel:
+                items.append({
+                    'name': rel,
+                    'key': obj['Key'],
+                    'size': obj['Size'],
+                    'modified': obj['LastModified'].isoformat() if obj.get('LastModified') else '',
+                })
+    return items
+
+
+def stream_s3_object(config_snapshot, s3_key, chunk_size=1024*1024):
+    """Stream a single file from S3. Returns (generator, content_length, content_type)."""
+    client = get_s3_client(config_snapshot)
+    bucket = config_snapshot['bucket_name']
+    resp = client.get_object(Bucket=bucket, Key=s3_key)
+    content_length = resp['ContentLength']
+    content_type = resp.get('ContentType', 'application/octet-stream')
+    # Guess better content type from key name
+    guessed, _ = mimetypes.guess_type(s3_key)
+    if guessed:
+        content_type = guessed
+
+    def generate():
+        body = resp['Body']
+        while True:
+            chunk = body.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+        body.close()
+
+    return generate(), content_length, content_type
+
+
+def read_s3_text(config_snapshot, s3_key, max_size=5*1024*1024):
+    """Read text file from S3, return content string or None. Max 5MB."""
+    try:
+        client = get_s3_client(config_snapshot)
+        bucket = config_snapshot['bucket_name']
+        head = client.head_object(Bucket=bucket, Key=s3_key)
+        if head['ContentLength'] > max_size:
+            return None
+        resp = client.get_object(Bucket=bucket, Key=s3_key)
+        return resp['Body'].read().decode('utf-8', errors='replace')
+    except:
+        return None
+
+
+MAX_ZIP_SIZE = 2 * 1024 * 1024 * 1024  # 2GB limit
+
+
+def stream_s3_folder_as_zip(config_snapshot, s3_key_prefix):
+    """Build a zip in memory from all files under a prefix, return bytes generator.
+    Limit total uncompressed size to 2GB."""
+    client = get_s3_client(config_snapshot)
+    bucket = config_snapshot['bucket_name']
+    prefix = s3_key_prefix.rstrip('/') + '/' if s3_key_prefix else ''
+
+    buf = io.BytesIO()
+    total_size = 0
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        paginator = client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                rel = obj['Key'][len(prefix):]
+                if not rel:
+                    continue
+                total_size += obj['Size']
+                if total_size > MAX_ZIP_SIZE:
+                    raise ValueError("Folder too large (>2GB), cannot zip")
+                data = client.get_object(Bucket=bucket, Key=obj['Key'])['Body'].read()
+                zf.writestr(rel, data)
+
+    buf.seek(0)
+    zip_bytes = buf.getvalue()
+
+    def generate():
+        chunk_size = 1024 * 1024
+        offset = 0
+        while offset < len(zip_bytes):
+            yield zip_bytes[offset:offset + chunk_size]
+            offset += chunk_size
+
+    return generate(), len(zip_bytes)
 
 
 # ==========================================
