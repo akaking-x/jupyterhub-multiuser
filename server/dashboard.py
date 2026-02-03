@@ -2082,99 +2082,248 @@ loadWs('');
 </script></body></html>"""
 
 # ===========================================
-# EMBED_CHAT - Realtime chat with users
+# EMBED_CHAT - Realtime chat with users (with friend system)
 # ===========================================
 
 EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
 .chat-container{display:flex;height:calc(100vh - 24px);gap:12px}
-.user-list{width:200px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
-.user-list-header{padding:12px;border-bottom:1px solid #334155;font-size:13px;font-weight:600}
-.user-list-items{flex:1;overflow-y:auto;padding:8px}
-.user-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px}
-.user-item:hover{background:#334155}
-.user-item.active{background:rgba(99,102,241,.3);border:1px solid #6366f1}
-.user-item .status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.user-item .status.online{background:#10b981}
-.user-item .status.offline{background:#64748b}
-.user-item .name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.user-item .unread{background:#ef4444;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px}
+.sidebar{width:260px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.sidebar-header{padding:12px;border-bottom:1px solid #334155;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.sidebar-header .add-btn{background:#6366f1;border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:16px}
+.sidebar-header .add-btn:hover{background:#4f46e5}
+.search-box{padding:8px 12px;border-bottom:1px solid #334155}
+.search-box input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 10px;color:#e2e8f0;font-size:12px}
+.search-box input:focus{outline:none;border-color:#6366f1}
+.tabs{display:flex;border-bottom:1px solid #334155}
+.tab{flex:1;padding:10px;text-align:center;font-size:12px;cursor:pointer;border-bottom:2px solid transparent}
+.tab:hover{background:#334155}
+.tab.active{border-bottom-color:#6366f1;color:#6366f1}
+.contact-list{flex:1;overflow-y:auto}
+.contact-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #1e293b}
+.contact-item:hover{background:#334155}
+.contact-item.active{background:rgba(99,102,241,.2);border-left:3px solid #6366f1}
+.contact-item .avatar{width:36px;height:36px;background:#334155;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.contact-item .info{flex:1;min-width:0}
+.contact-item .name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.contact-item .name .online-dot{width:8px;height:8px;background:#10b981;border-radius:50%}
+.contact-item .last-msg{font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contact-item .meta{text-align:right;flex-shrink:0}
+.contact-item .time{font-size:10px;color:#64748b}
+.contact-item .unread{background:#ef4444;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-top:4px}
+.contact-item .friend-badge{font-size:10px;color:#10b981}
+.contact-item .pending-badge{font-size:10px;color:#f59e0b}
+.contact-item .actions{display:flex;gap:4px}
+.contact-item .actions button{padding:4px 8px;font-size:11px;border-radius:4px;border:none;cursor:pointer}
 .chat-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
-.chat-header{padding:12px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;gap:10px}
+.chat-header{padding:12px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;gap:12px}
+.chat-header .avatar{width:40px;height:40px;background:#334155;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
+.chat-header .info{flex:1}
 .chat-header .name{font-weight:600;font-size:14px}
 .chat-header .status{font-size:12px;color:#94a3b8}
+.chat-header .header-actions button{background:transparent;border:1px solid #334155;color:#94a3b8;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px}
+.chat-header .header-actions button:hover{background:#334155;color:#fff}
 .chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
 .message{max-width:70%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.4}
 .message.sent{background:#6366f1;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 .message.received{background:#334155;align-self:flex-start;border-bottom-left-radius:4px}
 .message .time{font-size:10px;opacity:0.7;margin-top:4px}
-.message.file{background:#0f172a;border:1px solid #334155}
-.message.file .file-info{display:flex;align-items:center;gap:8px}
-.message.file .file-icon{font-size:24px}
-.message.file .file-name{font-weight:500}
-.message.file .file-actions{margin-top:8px;display:flex;gap:6px}
-.chat-input{padding:12px;border-top:1px solid #334155;display:flex;gap:8px}
-.chat-input input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:13px}
-.chat-input input:focus{outline:none;border-color:#6366f1}
-.pending-bar{background:#f59e0b;color:#000;padding:8px 12px;font-size:12px;display:none}
-.pending-bar.show{display:flex;align-items:center;justify-content:space-between}
+.message.file{background:#0f172a;border:1px solid #334155;max-width:85%}
+.message.file .file-box{display:flex;align-items:center;gap:10px;padding:8px}
+.message.file .file-icon{font-size:28px}
+.message.file .file-name{font-weight:500;word-break:break-all}
+.message.file .file-size{font-size:11px;color:#94a3b8}
+.message.file .file-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #334155}
+.chat-input{padding:12px;border-top:1px solid #334155;display:flex;gap:8px;align-items:center}
+.chat-input input[type="text"]{flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:13px}
+.chat-input input[type="text"]:focus{outline:none;border-color:#6366f1}
+.chat-input .attach-btn{background:#334155;border:none;color:#94a3b8;width:38px;height:38px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+.chat-input .attach-btn:hover{background:#475569;color:#fff}
+.chat-input .send-btn{background:#6366f1;border:none;color:#fff;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500}
+.chat-input .send-btn:hover{background:#4f46e5}
+.chat-input .send-btn:disabled{background:#334155;cursor:not-allowed}
 .no-chat{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center}
 .no-chat .icon{font-size:60px;margin-bottom:16px;opacity:0.5}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.show{display:flex}
+.modal{background:#1e293b;border-radius:12px;border:1px solid #334155;width:400px;max-height:80vh;display:flex;flex-direction:column}
+.modal-header{padding:16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{margin:0;font-size:16px}
+.modal-header .close-btn{background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer}
+.modal-body{padding:16px;flex:1;overflow-y:auto}
+.modal-footer{padding:16px;border-top:1px solid #334155;display:flex;justify-content:flex-end;gap:8px}
+.search-result{padding:10px;border-radius:6px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.search-result:hover{background:#334155}
+.search-result .avatar{width:36px;height:36px;background:#334155;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.search-result .info{flex:1}
+.search-result .name{font-size:13px;font-weight:500}
+.search-result .status{font-size:11px;color:#64748b}
+.upload-progress{background:#0f172a;border-radius:8px;padding:10px;margin-top:8px}
+.upload-progress .filename{font-size:12px;margin-bottom:6px}
+.upload-progress .bar{height:4px;background:#334155;border-radius:2px;overflow:hidden}
+.upload-progress .bar-fill{height:100%;background:#6366f1;transition:width .3s}
 </style>
 </head><body>
 <div class="container" style="padding:12px;height:100vh;overflow:hidden">
     <div class="chat-container">
-        <div class="user-list">
-            <div class="user-list-header">&#128101; Users</div>
-            <div class="user-list-items" id="user-list"></div>
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>&#128172; Tin nhắn</span>
+                <button class="add-btn" onclick="showAddFriend()" title="Thêm bạn">+</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="contact-search" placeholder="Tìm kiếm..." oninput="filterContacts()">
+            </div>
+            <div class="tabs">
+                <div class="tab active" data-tab="all" onclick="switchTab('all')">Tất cả</div>
+                <div class="tab" data-tab="friends" onclick="switchTab('friends')">Bạn bè</div>
+                <div class="tab" data-tab="requests" onclick="switchTab('requests')">Lời mời <span id="request-count"></span></div>
+            </div>
+            <div class="contact-list" id="contact-list"></div>
         </div>
         <div class="chat-main">
-            <div class="pending-bar" id="pending-bar">
-                <span id="pending-text">1 file waiting</span>
-                <button class="btn btn-sm btn-success" onclick="showPending()">View</button>
-            </div>
             <div id="chat-area">
-                <div class="no-chat"><div><div class="icon">&#128172;</div><div>Select a user to start chatting</div></div></div>
+                <div class="no-chat"><div><div class="icon">&#128172;</div><div>Chọn một người để bắt đầu trò chuyện</div></div></div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Add Friend Modal -->
+<div class="modal-overlay" id="add-friend-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#128269; Tìm kiếm người dùng</h3>
+            <button class="close-btn" onclick="hideAddFriend()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="user-search" placeholder="Nhập tên người dùng..." style="width:100%;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;margin-bottom:12px" oninput="searchUsers()">
+            <div id="search-results"></div>
+        </div>
+    </div>
+</div>
+
+<!-- File Preview Modal -->
+<div class="modal-overlay" id="file-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>&#128206; Gửi file</h3>
+            <button class="close-btn" onclick="hideFileModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="file-preview"></div>
+            <div class="upload-progress" id="upload-progress" style="display:none">
+                <div class="filename" id="upload-filename"></div>
+                <div class="bar"><div class="bar-fill" id="upload-bar" style="width:0%"></div></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideFileModal()">Hủy</button>
+            <button class="btn btn-primary" id="send-file-btn" onclick="confirmSendFile()">Gửi</button>
+        </div>
+    </div>
+</div>
+
 <script>
 var socket=io();
 var currentUser='{{ username }}';
 var selectedUser=null;
-var users={};
+var currentTab='all';
+var contacts={};  // username -> {online, isFriend, friendStatus, lastMsg, lastTime, unread}
+var friends={};   // username -> {status: 'accepted'|'pending_sent'|'pending_received'}
 var messages={};
-var unread={};
-var pendingFiles=[];
+var pendingFile=null;
+var searchTimeout=null;
 
+// ===== INITIALIZATION =====
+function init(){
+    loadFriends();
+    loadContacts();
+    loadPendingFiles();
+}
+
+function loadFriends(){
+    fetch('/api/friends/list').then(r=>r.json()).then(data=>{
+        friends={};
+        (data.friends||[]).forEach(f=>{
+            friends[f.friend]=f.status;
+        });
+        (data.pending_received||[]).forEach(f=>{
+            friends[f.from_user]='pending_received';
+        });
+        (data.pending_sent||[]).forEach(f=>{
+            friends[f.to_user]='pending_sent';
+        });
+        updateRequestCount();
+        renderContacts();
+    });
+}
+
+function loadContacts(){
+    fetch('/api/chat/contacts').then(r=>r.json()).then(data=>{
+        contacts={};
+        (data.contacts||[]).forEach(c=>{
+            contacts[c.username]={
+                online:c.online,
+                lastMsg:c.last_message||'',
+                lastTime:c.last_time||'',
+                unread:c.unread||0
+            };
+        });
+        renderContacts();
+    });
+}
+
+function loadPendingFiles(){
+    fetch('/api/chat/pending-files').then(r=>r.json()).then(data=>{
+        // Handle pending files if needed
+    });
+}
+
+// ===== SOCKET EVENTS =====
 socket.on('connect',function(){
     console.log('Connected to chat');
     socket.emit('get_online_users');
 });
 
-socket.on('user_list',function(data){
-    users=data.users||{};
-    renderUserList();
+socket.on('online_users',function(data){
+    var onlineList=data.users||[];
+    Object.keys(contacts).forEach(u=>{
+        contacts[u].online=onlineList.includes(u);
+    });
+    renderContacts();
 });
 
 socket.on('user_status',function(data){
-    users[data.user]=data.status;
-    renderUserList();
+    if(contacts[data.user]){
+        contacts[data.user].online=(data.status==='online');
+    }
+    renderContacts();
+    if(selectedUser===data.user)updateChatHeader();
 });
 
 socket.on('new_message',function(data){
     var from=data.from_user;
     if(!messages[from])messages[from]=[];
     messages[from].push(data);
+    // Add to contacts if not exists
+    if(!contacts[from]){
+        contacts[from]={online:true,lastMsg:'',lastTime:'',unread:0};
+    }
+    contacts[from].lastMsg=data.message_type==='file'?'[File] '+data.file_info.filename:data.content;
+    contacts[from].lastTime=data.created_at;
     if(selectedUser===from){
         renderMessages();
         scrollToBottom();
     }else{
-        unread[from]=(unread[from]||0)+1;
-        renderUserList();
+        contacts[from].unread=(contacts[from].unread||0)+1;
     }
+    renderContacts();
+});
+
+socket.on('message_sent',function(data){
+    // Message confirmed sent
 });
 
 socket.on('message_history',function(data){
@@ -2183,117 +2332,421 @@ socket.on('message_history',function(data){
     scrollToBottom();
 });
 
-socket.on('file_transfer_request',function(data){
-    pendingFiles.push(data);
-    updatePendingBar();
+socket.on('friend_request',function(data){
+    friends[data.from_user]='pending_received';
+    updateRequestCount();
+    renderContacts();
 });
 
-socket.on('file_accepted',function(data){
-    alert('File accepted: '+data.filename);
+socket.on('friend_accepted',function(data){
+    friends[data.by_user]='accepted';
+    if(!contacts[data.by_user])contacts[data.by_user]={online:false,lastMsg:'',lastTime:'',unread:0};
+    renderContacts();
 });
 
-socket.on('file_rejected',function(data){
-    alert('File rejected: '+data.filename);
+socket.on('file_uploaded',function(data){
+    // File upload complete, now send via socket
+    socket.emit('send_file_message',{to_user:selectedUser,file_id:data.file_id,filename:data.filename,size:data.size});
+    hideFileModal();
 });
 
-function renderUserList(){
-    var html='';
-    var allUsers=Object.keys(users).filter(u=>u!==currentUser).sort();
-    allUsers.forEach(function(u){
-        var online=users[u]==='online';
-        var unreadCount=unread[u]||0;
-        var active=selectedUser===u?'active':'';
-        html+='<div class="user-item '+active+'" onclick="selectUser(\\''+u+'\\')">';
-        html+='<span class="status '+(online?'online':'offline')+'"></span>';
-        html+='<span class="name">'+u+'</span>';
-        if(unreadCount)html+='<span class="unread">'+unreadCount+'</span>';
-        html+='</div>';
-    });
-    document.getElementById('user-list').innerHTML=html||'<div style="padding:20px;text-align:center;color:#64748b">No other users</div>';
+// ===== TAB & FILTER =====
+function switchTab(tab){
+    currentTab=tab;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="'+tab+'"]').classList.add('active');
+    renderContacts();
 }
 
+function filterContacts(){
+    renderContacts();
+}
+
+function updateRequestCount(){
+    var count=Object.values(friends).filter(s=>s==='pending_received').length;
+    document.getElementById('request-count').textContent=count?'('+count+')':'';
+}
+
+// ===== RENDER CONTACTS =====
+function renderContacts(){
+    var search=document.getElementById('contact-search').value.toLowerCase();
+    var html='';
+
+    // Build list based on tab
+    var list=[];
+
+    if(currentTab==='requests'){
+        // Show pending friend requests received
+        Object.keys(friends).forEach(u=>{
+            if(friends[u]==='pending_received'){
+                list.push({username:u,type:'request'});
+            }
+        });
+    }else if(currentTab==='friends'){
+        // Show only accepted friends
+        Object.keys(friends).forEach(u=>{
+            if(friends[u]==='accepted'){
+                var c=contacts[u]||{online:false,lastMsg:'',lastTime:'',unread:0};
+                list.push({username:u,type:'friend',...c});
+            }
+        });
+    }else{
+        // All: friends + recent contacts
+        var added={};
+        // Friends first
+        Object.keys(friends).forEach(u=>{
+            if(friends[u]==='accepted'){
+                var c=contacts[u]||{online:false,lastMsg:'',lastTime:'',unread:0};
+                list.push({username:u,type:'friend',...c});
+                added[u]=true;
+            }
+        });
+        // Then other contacts
+        Object.keys(contacts).forEach(u=>{
+            if(!added[u]){
+                list.push({username:u,type:'contact',...contacts[u]});
+            }
+        });
+    }
+
+    // Filter by search
+    if(search){
+        list=list.filter(x=>x.username.toLowerCase().includes(search));
+    }
+
+    // Sort: online first, then by last message time
+    list.sort((a,b)=>{
+        if(a.online!==b.online)return b.online-a.online;
+        return(b.lastTime||'').localeCompare(a.lastTime||'');
+    });
+
+    // Render
+    list.forEach(item=>{
+        var u=item.username;
+        var active=selectedUser===u?'active':'';
+        var initial=u.charAt(0).toUpperCase();
+
+        if(item.type==='request'){
+            html+='<div class="contact-item" style="background:#1e3a5f">';
+            html+='<div class="avatar">'+initial+'</div>';
+            html+='<div class="info"><div class="name">'+escapeHtml(u)+'</div><div class="last-msg pending-badge">Muốn kết bạn</div></div>';
+            html+='<div class="actions">';
+            html+='<button style="background:#10b981;color:#fff" onclick="event.stopPropagation();acceptFriend(\\''+u+'\\')">✓</button>';
+            html+='<button style="background:#ef4444;color:#fff" onclick="event.stopPropagation();rejectFriend(\\''+u+'\\')">✕</button>';
+            html+='</div></div>';
+        }else{
+            html+='<div class="contact-item '+active+'" onclick="selectUser(\\''+u+'\\')">';
+            html+='<div class="avatar">'+initial+'</div>';
+            html+='<div class="info">';
+            html+='<div class="name">'+(item.online?'<span class="online-dot"></span>':'')+escapeHtml(u);
+            if(item.type==='friend')html+=' <span class="friend-badge">★</span>';
+            html+='</div>';
+            html+='<div class="last-msg">'+(item.lastMsg?escapeHtml(item.lastMsg):'Chưa có tin nhắn')+'</div>';
+            html+='</div>';
+            html+='<div class="meta">';
+            if(item.lastTime)html+='<div class="time">'+formatTime(item.lastTime)+'</div>';
+            if(item.unread)html+='<div class="unread">'+item.unread+'</div>';
+            html+='</div></div>';
+        }
+    });
+
+    document.getElementById('contact-list').innerHTML=html||'<div style="padding:20px;text-align:center;color:#64748b">Không có liên hệ nào</div>';
+}
+
+// ===== SELECT USER & CHAT =====
 function selectUser(u){
     selectedUser=u;
-    unread[u]=0;
-    renderUserList();
+    if(contacts[u])contacts[u].unread=0;
+    renderContacts();
     socket.emit('get_messages',{with_user:u});
-    var online=users[u]==='online';
-    document.getElementById('chat-area').innerHTML='<div class="chat-header"><span class="name">'+u+'</span><span class="status">'+(online?'Online':'Offline')+'</span></div><div class="chat-messages" id="chat-messages"></div><div class="chat-input"><input type="text" id="msg-input" placeholder="Type a message..." onkeydown="if(event.key===\\'Enter\\')sendMsg()"><label class="btn btn-secondary btn-sm" style="cursor:pointer">&#128206;<input type="file" style="display:none" onchange="sendFile(this.files[0])"></label><button class="btn btn-primary btn-sm" onclick="sendMsg()">Send</button></div>';
+
+    var online=contacts[u]?.online;
+    var isFriend=friends[u]==='accepted';
+    var friendStatus=friends[u];
+
+    var headerActions='';
+    if(!isFriend&&friendStatus!=='pending_sent'){
+        headerActions='<button onclick="addFriend(\\''+u+'\\')">+ Kết bạn</button>';
+    }else if(friendStatus==='pending_sent'){
+        headerActions='<button disabled>Đã gửi lời mời</button>';
+    }else if(isFriend){
+        headerActions='<button onclick="removeFriend(\\''+u+'\\')">Hủy kết bạn</button>';
+    }
+
+    document.getElementById('chat-area').innerHTML=
+        '<div class="chat-header">'+
+        '<div class="avatar">'+u.charAt(0).toUpperCase()+'</div>'+
+        '<div class="info"><div class="name">'+escapeHtml(u)+(isFriend?' <span style="color:#10b981">★</span>':'')+'</div>'+
+        '<div class="status">'+(online?'Đang online':'Offline')+'</div></div>'+
+        '<div class="header-actions">'+headerActions+'</div>'+
+        '</div>'+
+        '<div class="chat-messages" id="chat-messages"></div>'+
+        '<div class="chat-input">'+
+        '<label class="attach-btn" title="Đính kèm file"><input type="file" style="display:none" onchange="previewFile(this.files[0])">&#128206;</label>'+
+        '<input type="text" id="msg-input" placeholder="Nhập tin nhắn..." onkeydown="if(event.key===\\'Enter\\')sendMsg()">'+
+        '<button class="send-btn" onclick="sendMsg()">Gửi</button>'+
+        '</div>';
+}
+
+function updateChatHeader(){
+    if(!selectedUser)return;
+    var statusEl=document.querySelector('.chat-header .status');
+    if(statusEl){
+        statusEl.textContent=contacts[selectedUser]?.online?'Đang online':'Offline';
+    }
 }
 
 function renderMessages(){
     var msgs=messages[selectedUser]||[];
     var html='';
+    var lastDate='';
+
     msgs.forEach(function(m){
         var sent=m.from_user===currentUser;
+        var msgDate=new Date(m.created_at).toLocaleDateString('vi-VN');
         var time=new Date(m.created_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
-        if(m.message_type==='file_transfer'){
+
+        // Date separator
+        if(msgDate!==lastDate){
+            html+='<div style="text-align:center;font-size:11px;color:#64748b;margin:16px 0">'+msgDate+'</div>';
+            lastDate=msgDate;
+        }
+
+        if(m.message_type==='file'){
             var fi=m.file_info||{};
-            html+='<div class="message file '+(sent?'sent':'received')+'"><div class="file-info"><span class="file-icon">&#128196;</span><div><div class="file-name">'+fi.filename+'</div><div style="font-size:11px;color:#94a3b8">'+(fi.size?formatSize(fi.size):'')+'</div></div></div>';
-            if(!sent&&fi.pending_id&&fi.status==='pending'){
-                html+='<div class="file-actions"><button class="btn btn-success btn-sm" onclick="acceptFile(\\''+fi.pending_id+'\\')">Accept</button><button class="btn btn-danger btn-sm" onclick="rejectFile(\\''+fi.pending_id+'\\')">Reject</button></div>';
+            html+='<div class="message file '+(sent?'sent':'received')+'">';
+            html+='<div class="file-box"><span class="file-icon">&#128196;</span><div><div class="file-name">'+escapeHtml(fi.filename||'file')+'</div><div class="file-size">'+(fi.size?formatSize(fi.size):'')+'</div></div></div>';
+            if(fi.download_url){
+                html+='<div class="file-actions"><a href="'+fi.download_url+'" class="btn btn-sm btn-primary" download>Tải xuống</a></div>';
             }
             html+='<div class="time">'+time+'</div></div>';
         }else{
             html+='<div class="message '+(sent?'sent':'received')+'">'+escapeHtml(m.content)+'<div class="time">'+time+'</div></div>';
         }
     });
+
     var el=document.getElementById('chat-messages');
-    if(el)el.innerHTML=html||'<div style="text-align:center;padding:40px;color:#64748b">No messages yet</div>';
+    if(el)el.innerHTML=html||'<div style="text-align:center;padding:40px;color:#64748b">Chưa có tin nhắn</div>';
 }
 
 function sendMsg(){
     var input=document.getElementById('msg-input');
     var text=input.value.trim();
     if(!text||!selectedUser)return;
+
     socket.emit('send_message',{to_user:selectedUser,content:text});
+
     if(!messages[selectedUser])messages[selectedUser]=[];
-    messages[selectedUser].push({from_user:currentUser,to_user:selectedUser,content:text,message_type:'text',created_at:new Date().toISOString()});
+    var now=new Date().toISOString();
+    messages[selectedUser].push({from_user:currentUser,to_user:selectedUser,content:text,message_type:'text',created_at:now});
+
+    // Update contact
+    if(!contacts[selectedUser])contacts[selectedUser]={online:false,lastMsg:'',lastTime:'',unread:0};
+    contacts[selectedUser].lastMsg=text;
+    contacts[selectedUser].lastTime=now;
+
     renderMessages();
+    renderContacts();
     scrollToBottom();
     input.value='';
 }
 
-function sendFile(file){
+// ===== FILE UPLOAD =====
+function previewFile(file){
     if(!file||!selectedUser)return;
-    alert('File sharing requires selecting from S3 Backup. Use the Share with User feature there.');
+    pendingFile=file;
+
+    var preview='<div style="display:flex;align-items:center;gap:12px;padding:16px;background:#0f172a;border-radius:8px">';
+    preview+='<span style="font-size:40px">&#128196;</span>';
+    preview+='<div><div style="font-weight:500">'+escapeHtml(file.name)+'</div>';
+    preview+='<div style="font-size:12px;color:#64748b">'+formatSize(file.size)+'</div></div></div>';
+    preview+='<div style="margin-top:12px;font-size:12px;color:#94a3b8">Gửi đến: <strong>'+escapeHtml(selectedUser)+'</strong></div>';
+
+    document.getElementById('file-preview').innerHTML=preview;
+    document.getElementById('upload-progress').style.display='none';
+    document.getElementById('send-file-btn').disabled=false;
+    document.getElementById('file-modal').classList.add('show');
 }
 
-function acceptFile(pendingId){
-    socket.emit('accept_file',{pending_id:pendingId,dest_path:''});
+function hideFileModal(){
+    document.getElementById('file-modal').classList.remove('show');
+    pendingFile=null;
 }
 
-function rejectFile(pendingId){
-    socket.emit('reject_file',{pending_id:pendingId});
+function confirmSendFile(){
+    if(!pendingFile||!selectedUser)return;
+
+    document.getElementById('send-file-btn').disabled=true;
+    document.getElementById('upload-progress').style.display='block';
+    document.getElementById('upload-filename').textContent='Đang tải: '+pendingFile.name;
+
+    var formData=new FormData();
+    formData.append('file',pendingFile);
+    formData.append('to_user',selectedUser);
+
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/chat/upload');
+
+    xhr.upload.onprogress=function(e){
+        if(e.lengthComputable){
+            var pct=Math.round((e.loaded/e.total)*100);
+            document.getElementById('upload-bar').style.width=pct+'%';
+        }
+    };
+
+    xhr.onload=function(){
+        if(xhr.status===200){
+            var resp=JSON.parse(xhr.responseText);
+            if(resp.success){
+                // Add file message locally
+                if(!messages[selectedUser])messages[selectedUser]=[];
+                messages[selectedUser].push({
+                    from_user:currentUser,
+                    to_user:selectedUser,
+                    message_type:'file',
+                    file_info:{filename:resp.filename,size:resp.size,download_url:resp.download_url},
+                    created_at:new Date().toISOString()
+                });
+                // Update contact
+                if(!contacts[selectedUser])contacts[selectedUser]={online:false,lastMsg:'',lastTime:'',unread:0};
+                contacts[selectedUser].lastMsg='[File] '+resp.filename;
+                contacts[selectedUser].lastTime=new Date().toISOString();
+                renderMessages();
+                renderContacts();
+                scrollToBottom();
+                hideFileModal();
+            }else{
+                alert('Lỗi: '+(resp.error||'Upload thất bại'));
+                document.getElementById('send-file-btn').disabled=false;
+            }
+        }else{
+            alert('Lỗi upload file');
+            document.getElementById('send-file-btn').disabled=false;
+        }
+    };
+
+    xhr.send(formData);
 }
 
-function updatePendingBar(){
-    var bar=document.getElementById('pending-bar');
-    var text=document.getElementById('pending-text');
-    if(pendingFiles.length){
-        bar.classList.add('show');
-        text.textContent=pendingFiles.length+' file(s) pending';
-    }else{
-        bar.classList.remove('show');
+// ===== FRIENDS =====
+function showAddFriend(){
+    document.getElementById('user-search').value='';
+    document.getElementById('search-results').innerHTML='<div style="color:#64748b;text-align:center;padding:20px">Nhập tên để tìm kiếm</div>';
+    document.getElementById('add-friend-modal').classList.add('show');
+    document.getElementById('user-search').focus();
+}
+
+function hideAddFriend(){
+    document.getElementById('add-friend-modal').classList.remove('show');
+}
+
+function searchUsers(){
+    clearTimeout(searchTimeout);
+    var q=document.getElementById('user-search').value.trim();
+    if(q.length<1){
+        document.getElementById('search-results').innerHTML='<div style="color:#64748b;text-align:center;padding:20px">Nhập tên để tìm kiếm</div>';
+        return;
     }
+    searchTimeout=setTimeout(function(){
+        fetch('/api/friends/search?q='+encodeURIComponent(q)).then(r=>r.json()).then(data=>{
+            var html='';
+            (data.users||[]).forEach(u=>{
+                var status=friends[u.username];
+                var statusText='';
+                var actionBtn='';
+                if(status==='accepted'){
+                    statusText='<span class="friend-badge">Bạn bè</span>';
+                }else if(status==='pending_sent'){
+                    statusText='<span class="pending-badge">Đã gửi lời mời</span>';
+                }else if(status==='pending_received'){
+                    statusText='<span class="pending-badge">Đang chờ bạn chấp nhận</span>';
+                    actionBtn='<button class="btn btn-success btn-sm" onclick="event.stopPropagation();acceptFriend(\\''+u.username+'\\')">Chấp nhận</button>';
+                }else{
+                    actionBtn='<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();addFriend(\\''+u.username+'\\')">Kết bạn</button>';
+                }
+                html+='<div class="search-result" onclick="selectUser(\\''+u.username+'\\');hideAddFriend()">';
+                html+='<div class="avatar">'+u.username.charAt(0).toUpperCase()+'</div>';
+                html+='<div class="info"><div class="name">'+escapeHtml(u.username)+'</div><div class="status">'+(u.online?'Online':'Offline')+' '+statusText+'</div></div>';
+                html+=actionBtn;
+                html+='</div>';
+            });
+            document.getElementById('search-results').innerHTML=html||'<div style="color:#64748b;text-align:center;padding:20px">Không tìm thấy</div>';
+        });
+    },300);
 }
 
-function showPending(){
-    if(!pendingFiles.length)return;
-    var msg='Pending files:\\n';
-    pendingFiles.forEach(function(p,i){
-        msg+=(i+1)+'. '+p.filename+' from '+p.from_user+'\\n';
+function addFriend(username){
+    fetch('/api/friends/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            friends[username]='pending_sent';
+            renderContacts();
+            searchUsers();
+            if(selectedUser===username)selectUser(username);
+        }else{
+            alert(data.error||'Lỗi');
+        }
     });
-    alert(msg);
 }
 
+function acceptFriend(username){
+    fetch('/api/friends/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            friends[username]='accepted';
+            if(!contacts[username])contacts[username]={online:false,lastMsg:'',lastTime:'',unread:0};
+            updateRequestCount();
+            renderContacts();
+        }else{
+            alert(data.error||'Lỗi');
+        }
+    });
+}
+
+function rejectFriend(username){
+    fetch('/api/friends/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            delete friends[username];
+            updateRequestCount();
+            renderContacts();
+        }
+    });
+}
+
+function removeFriend(username){
+    if(!confirm('Hủy kết bạn với '+username+'?'))return;
+    fetch('/api/friends/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            delete friends[username];
+            renderContacts();
+            if(selectedUser===username)selectUser(username);
+        }
+    });
+}
+
+// ===== UTILS =====
 function scrollToBottom(){
     var el=document.getElementById('chat-messages');
-    if(el)el.scrollTop=el.scrollHeight;
+    if(el)setTimeout(()=>el.scrollTop=el.scrollHeight,50);
+}
+
+function formatTime(iso){
+    if(!iso)return'';
+    var d=new Date(iso);
+    var now=new Date();
+    if(d.toDateString()===now.toDateString()){
+        return d.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+    }
+    return d.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'});
 }
 
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
-function escapeHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Start
+init();
 </script></body></html>"""
 
 # ===========================================
@@ -4769,6 +5222,437 @@ def api_chat_pending_files():
         return jsonify({'pending_files': pending})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ===========================================
+# Friends API
+# ===========================================
+
+def _init_friends_collection(db):
+    """Ensure indexes on friends collection"""
+    col = db.friends
+    col.create_index([('user', 1), ('friend', 1)], unique=True)
+    col.create_index('user')
+    col.create_index('friend')
+    col.create_index('status')
+    return col
+
+@app.route('/api/friends/list')
+def api_friends_list():
+    """Get friends list with pending requests"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+
+        # Accepted friends (both directions)
+        friends = list(db.friends.find({
+            '$or': [
+                {'user': username, 'status': 'accepted'},
+                {'friend': username, 'status': 'accepted'}
+            ]
+        }))
+
+        friend_list = []
+        for f in friends:
+            friend_username = f['friend'] if f['user'] == username else f['user']
+            friend_list.append({
+                'friend': friend_username,
+                'status': 'accepted',
+                'since': f.get('accepted_at', f.get('created_at')).isoformat() if f.get('accepted_at') or f.get('created_at') else None
+            })
+
+        # Pending requests I sent
+        pending_sent = list(db.friends.find({'user': username, 'status': 'pending'}))
+        sent_list = [{'to_user': f['friend'], 'created_at': f['created_at'].isoformat() if f.get('created_at') else None} for f in pending_sent]
+
+        # Pending requests I received
+        pending_received = list(db.friends.find({'friend': username, 'status': 'pending'}))
+        received_list = [{'from_user': f['user'], 'created_at': f['created_at'].isoformat() if f.get('created_at') else None} for f in pending_received]
+
+        return jsonify({
+            'friends': friend_list,
+            'pending_sent': sent_list,
+            'pending_received': received_list
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/friends/search')
+def api_friends_search():
+    """Search users to add as friends"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    q = request.args.get('q', '').strip()
+    current_user = session['user']
+
+    if len(q) < 1:
+        return jsonify({'users': []})
+
+    try:
+        db = get_db()
+        users = list(db.users.find(
+            {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user, '$regex': q, '$options': 'i'}},
+            {'username': 1, '_id': 0}
+        ).limit(20))
+
+        result = []
+        for u in users:
+            result.append({
+                'username': u['username'],
+                'online': u['username'] in user_sids
+            })
+
+        return jsonify({'users': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/friends/add', methods=['POST'])
+def api_friends_add():
+    """Send friend request"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    target_user = data.get('username', '').strip()
+    current_user = session['user']
+
+    if not target_user or target_user == current_user:
+        return jsonify({'error': 'Invalid user'}), 400
+
+    try:
+        db = get_db()
+        _init_friends_collection(db)
+
+        # Check if user exists
+        if not db.users.find_one({'username': target_user, 'role': {'$ne': 'admin'}}):
+            return jsonify({'error': 'User not found'}), 404
+
+        # Check if already friends or pending
+        existing = db.friends.find_one({
+            '$or': [
+                {'user': current_user, 'friend': target_user},
+                {'user': target_user, 'friend': current_user}
+            ]
+        })
+
+        if existing:
+            if existing['status'] == 'accepted':
+                return jsonify({'error': 'Already friends'}), 400
+            elif existing['user'] == current_user:
+                return jsonify({'error': 'Request already sent'}), 400
+            else:
+                # They sent us a request, auto-accept
+                db.friends.update_one(
+                    {'_id': existing['_id']},
+                    {'$set': {'status': 'accepted', 'accepted_at': datetime.utcnow()}}
+                )
+                # Notify them
+                if socketio:
+                    socketio.emit('friend_accepted', {'by_user': current_user}, room=target_user)
+                return jsonify({'success': True, 'auto_accepted': True})
+
+        # Create friend request
+        db.friends.insert_one({
+            'user': current_user,
+            'friend': target_user,
+            'status': 'pending',
+            'created_at': datetime.utcnow()
+        })
+
+        # Notify target user
+        if socketio:
+            socketio.emit('friend_request', {'from_user': current_user}, room=target_user)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/friends/accept', methods=['POST'])
+def api_friends_accept():
+    """Accept friend request"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    from_user = data.get('username', '').strip()
+    current_user = session['user']
+
+    try:
+        db = get_db()
+        result = db.friends.update_one(
+            {'user': from_user, 'friend': current_user, 'status': 'pending'},
+            {'$set': {'status': 'accepted', 'accepted_at': datetime.utcnow()}}
+        )
+
+        if result.modified_count:
+            # Notify requester
+            if socketio:
+                socketio.emit('friend_accepted', {'by_user': current_user}, room=from_user)
+            return jsonify({'success': True})
+        return jsonify({'error': 'Request not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/friends/reject', methods=['POST'])
+def api_friends_reject():
+    """Reject friend request"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    from_user = data.get('username', '').strip()
+    current_user = session['user']
+
+    try:
+        db = get_db()
+        result = db.friends.delete_one({
+            'user': from_user, 'friend': current_user, 'status': 'pending'
+        })
+
+        return jsonify({'success': result.deleted_count > 0})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/friends/remove', methods=['POST'])
+def api_friends_remove():
+    """Remove friend"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    friend_user = data.get('username', '').strip()
+    current_user = session['user']
+
+    try:
+        db = get_db()
+        result = db.friends.delete_one({
+            '$or': [
+                {'user': current_user, 'friend': friend_user},
+                {'user': friend_user, 'friend': current_user}
+            ]
+        })
+
+        return jsonify({'success': result.deleted_count > 0})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ===========================================
+# Chat Contacts & File Upload
+# ===========================================
+
+@app.route('/api/chat/contacts')
+def api_chat_contacts():
+    """Get contacts: friends + users with recent messages"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+
+        # Get distinct users from messages (both directions)
+        pipeline = [
+            {'$match': {'$or': [{'from_user': username}, {'to_user': username}]}},
+            {'$sort': {'created_at': -1}},
+            {'$group': {
+                '_id': {'$cond': [{'$eq': ['$from_user', username]}, '$to_user', '$from_user']},
+                'last_message': {'$first': '$content'},
+                'last_time': {'$first': '$created_at'},
+                'message_type': {'$first': '$message_type'},
+                'file_info': {'$first': '$file_info'}
+            }}
+        ]
+
+        contacts_from_msgs = {doc['_id']: {
+            'last_message': '[File] ' + doc['file_info'].get('filename', '') if doc.get('message_type') == 'file' else doc.get('last_message', ''),
+            'last_time': doc['last_time'].isoformat() if doc.get('last_time') else ''
+        } for doc in db.messages.aggregate(pipeline)}
+
+        # Get friends
+        friends_docs = list(db.friends.find({
+            '$or': [
+                {'user': username, 'status': 'accepted'},
+                {'friend': username, 'status': 'accepted'}
+            ]
+        }))
+
+        friend_set = set()
+        for f in friends_docs:
+            friend_set.add(f['friend'] if f['user'] == username else f['user'])
+
+        # Combine
+        all_contacts = set(contacts_from_msgs.keys()) | friend_set
+
+        # Count unread messages
+        unread_pipeline = [
+            {'$match': {'to_user': username, 'is_read': {'$ne': True}}},
+            {'$group': {'_id': '$from_user', 'count': {'$sum': 1}}}
+        ]
+        unread_counts = {doc['_id']: doc['count'] for doc in db.messages.aggregate(unread_pipeline)}
+
+        result = []
+        for contact in all_contacts:
+            msg_info = contacts_from_msgs.get(contact, {})
+            result.append({
+                'username': contact,
+                'online': contact in user_sids,
+                'is_friend': contact in friend_set,
+                'last_message': msg_info.get('last_message', ''),
+                'last_time': msg_info.get('last_time', ''),
+                'unread': unread_counts.get(contact, 0)
+            })
+
+        # Sort: online first, then by last_time
+        result.sort(key=lambda x: (not x['online'], x['last_time'] or ''), reverse=False)
+        result.sort(key=lambda x: not x['online'])
+
+        return jsonify({'contacts': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/upload', methods=['POST'])
+def api_chat_upload():
+    """Upload file for chat - stores in shared S3"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+
+    file = request.files['file']
+    to_user = request.form.get('to_user', '').strip()
+    from_user = session['user']
+
+    if not file.filename or not to_user:
+        return jsonify({'error': 'Missing file or recipient'}), 400
+
+    try:
+        db = get_db()
+
+        # Get shared S3 config
+        cfg = get_shared_s3_config(db)
+        if not cfg:
+            return jsonify({'error': 'Chat file sharing not configured (no shared S3)'}), 400
+
+        # Generate unique path for chat files
+        file_id = str(uuid.uuid4())[:12]
+        timestamp = datetime.utcnow().strftime('%Y%m%d')
+        safe_filename = file.filename.replace('/', '_').replace('\\', '_')
+        s3_path = f"chat_files/{timestamp}/{from_user}/{file_id}_{safe_filename}"
+
+        # Upload to shared S3
+        file_data = file.read()
+        file_size = len(file_data)
+
+        ok, result = upload_to_s3(cfg, '', s3_path, file_data)
+
+        if not ok:
+            return jsonify({'error': f'Upload failed: {result}'}), 500
+
+        # Generate download URL
+        download_url = f"/api/chat/file/{file_id}"
+
+        # Store file info in database
+        db.chat_files.insert_one({
+            '_id': file_id,
+            'from_user': from_user,
+            'to_user': to_user,
+            'filename': file.filename,
+            'size': file_size,
+            's3_path': s3_path,
+            'created_at': datetime.utcnow()
+        })
+
+        # Create message record
+        _init_messages_collection(db)
+        msg_doc = {
+            'from_user': from_user,
+            'to_user': to_user,
+            'message_type': 'file',
+            'content': f'[File] {file.filename}',
+            'file_info': {
+                'file_id': file_id,
+                'filename': file.filename,
+                'size': file_size,
+                'download_url': download_url
+            },
+            'created_at': datetime.utcnow()
+        }
+        db.messages.insert_one(msg_doc)
+
+        # Notify recipient via WebSocket
+        if socketio:
+            socketio.emit('new_message', {
+                'from_user': from_user,
+                'to_user': to_user,
+                'message_type': 'file',
+                'content': f'[File] {file.filename}',
+                'file_info': {
+                    'file_id': file_id,
+                    'filename': file.filename,
+                    'size': file_size,
+                    'download_url': download_url
+                },
+                'created_at': datetime.utcnow().isoformat()
+            }, room=to_user)
+
+        return jsonify({
+            'success': True,
+            'file_id': file_id,
+            'filename': file.filename,
+            'size': file_size,
+            'download_url': download_url
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/file/<file_id>')
+def api_chat_file_download(file_id):
+    """Download chat file"""
+    if 'user' not in session:
+        return 'Unauthorized', 401
+
+    username = session['user']
+
+    try:
+        db = get_db()
+        file_doc = db.chat_files.find_one({'_id': file_id})
+
+        if not file_doc:
+            return 'File not found', 404
+
+        # Check permission - only sender or recipient can download
+        if username != file_doc['from_user'] and username != file_doc['to_user']:
+            # Check if admin
+            if not session.get('is_admin'):
+                return 'Forbidden', 403
+
+        # Get shared S3 config
+        cfg = get_shared_s3_config(db)
+        if not cfg:
+            return 'S3 not configured', 500
+
+        # Stream file from S3
+        gen, length, ctype = stream_s3_object(cfg, file_doc['s3_path'])
+
+        headers = {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': length,
+            'Content-Disposition': f'attachment; filename="{file_doc["filename"]}"'
+        }
+
+        return Response(gen, headers=headers)
+
+    except Exception as e:
+        return str(e), 500
 
 
 if __name__ == '__main__':
