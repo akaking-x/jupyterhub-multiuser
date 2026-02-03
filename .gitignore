@@ -37,6 +37,7 @@ verify_*.py
 *.log
 *.sqlite
 *.db
+s3_config.json
 nul
 cookies.txt
 response.html

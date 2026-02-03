@@ -15,6 +15,11 @@ services:
       - APP_PORT=${APP_PORT:-9999}
       - DASHBOARD_PORT=${DASHBOARD_PORT:-9998}
       - JUPYTER_BASE_PORT=${JUPYTER_BASE_PORT:-9800}
+      - MONGO_HOST=jupyterhub-mongodb
+      - MONGO_PORT=27017
+      - MONGO_USER=jupyterhub
+      - MONGO_PASS=${MONGO_PASS}
+      - MONGO_DB=jupyterhub
     volumes:
       # Persist user data
       - jupyterhub_data:/opt/jupyterhub/data
@@ -23,8 +28,29 @@ services:
       - jupyterhub_logs:/var/log
     # Required for user management
     privileged: true
+    depends_on:
+      - mongodb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9999/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  mongodb:
+    image: mongo:7
+    container_name: jupyterhub-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=jupyterhub
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
+      - MONGO_INITDB_DATABASE=jupyterhub
+    volumes:
+      - jupyterhub_mongo_data:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -36,6 +62,8 @@ volumes:
   user_homes:
     driver: local
   jupyterhub_logs:
+    driver: local
+  jupyterhub_mongo_data:
     driver: local
 
 # Optional: Add Cloudflare Tunnel

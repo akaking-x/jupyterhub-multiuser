@@ -36,6 +36,8 @@ RUN /opt/jupyterlab/venv/bin/pip install --upgrade pip && \
 
 # Copy server files
 COPY server/dashboard.py /opt/jupyterhub/dashboard.py
+COPY server/extension_manager.py /opt/jupyterhub/extension_manager.py
+COPY server/s3_manager.py /opt/jupyterhub/s3_manager.py
 COPY server/lab_manager.sh /opt/jupyterhub/lab_manager.sh
 COPY server/gen_nginx.sh /opt/jupyterhub/gen_nginx.sh
 
