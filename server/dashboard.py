@@ -2768,7 +2768,7 @@ function renderMessages(){
             if(sent){
                 // Sender can always download their own file
                 html+='<div class="file-actions">';
-                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
+                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download="'+escapeHtml(fi.filename||'file')+'">Tải xuống</a>';
                 if(status==='pending'){
                     html+='<span style="font-size:11px;color:#f59e0b;margin-left:8px">Chờ duyệt</span>';
                 }else if(status==='rejected'){
@@ -2786,7 +2786,7 @@ function renderMessages(){
             }else if(status==='accepted'){
                 // Accepted - show download options
                 html+='<div class="file-actions">';
-                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
+                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download="'+escapeHtml(fi.filename||'file')+'">Tải xuống</a>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToS3(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ S3</button>';
                 html+='</div>';
@@ -6088,10 +6088,17 @@ def api_chat_file_download(file_id):
         # Stream file from S3
         gen, length, ctype = stream_s3_object(cfg, file_doc['s3_path'])
 
+        # Properly encode filename for Content-Disposition (RFC 5987)
+        filename = file_doc['filename']
+        ascii_filename = filename.encode('ascii', 'ignore').decode('ascii') or 'file'
+
+        from urllib.parse import quote
+        encoded_filename = quote(filename)
+
         headers = {
             'Content-Type': 'application/octet-stream',
             'Content-Length': length,
-            'Content-Disposition': f'attachment; filename="{file_doc["filename"]}"'
+            'Content-Disposition': f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
         }
 
         return Response(gen, headers=headers)
