@@ -3765,6 +3765,20 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 .upload-zone .icon{font-size:36px;margin-bottom:8px;opacity:0.5}
 .upload-zone .text{font-size:13px;color:#94a3b8}
 
+/* New Task Attachments */
+.new-attachments-section{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px}
+.new-attachments-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;min-height:30px}
+.new-attach-item{display:flex;align-items:center;gap:6px;background:#1e293b;border:1px solid #334155;padding:6px 10px;border-radius:6px;font-size:12px}
+.new-attach-item .icon{font-size:14px}
+.new-attach-item .name{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.new-attach-item .remove{background:none;border:none;color:#64748b;cursor:pointer;padding:0 2px;font-size:14px}
+.new-attach-item .remove:hover{color:#ef4444}
+.new-attach-buttons{display:flex;gap:8px}
+.new-file-browser{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;margin-top:12px}
+.file-browser-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;font-weight:600}
+.btn-close-browser{background:none;border:none;color:#64748b;cursor:pointer;font-size:18px}
+.btn-close-browser:hover{color:#ef4444}
+
 /* Toast */
 .toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:10px}
 .toast{background:linear-gradient(145deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:12px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5);display:flex;align-items:center;gap:12px;animation:toastIn .3s ease;max-width:350px}
@@ -3838,7 +3852,7 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 
 <!-- New Task Modal -->
 <div class="modal-overlay" id="new-task-modal">
-    <div class="modal-box">
+    <div class="modal-box wide">
         <div class="modal-header">
             <h3>&#10024; Create New Task</h3>
             <button class="modal-close" onclick="hideNewTaskModal()">&times;</button>
@@ -3850,7 +3864,7 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
             </div>
             <div class="form-group">
                 <label>Description (Markdown supported)</label>
-                <textarea class="form-input edit-desc" id="new-desc" placeholder="## Task Details\n\n- Item 1\n- Item 2\n\n**Important:** Write your notes here..."></textarea>
+                <textarea class="form-input edit-desc" id="new-desc" style="min-height:120px" placeholder="## Task Details&#10;&#10;- Item 1&#10;- Item 2&#10;&#10;**Important:** Write your notes here..."></textarea>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -3869,9 +3883,44 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
                     </select>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>&#128197; Start Date</label>
+                    <input type="datetime-local" class="form-input" id="new-start">
+                </div>
+                <div class="form-group">
+                    <label>&#128198; End Date</label>
+                    <input type="datetime-local" class="form-input" id="new-end">
+                </div>
+            </div>
             <div class="form-group">
-                <label>Due Date</label>
-                <input type="date" class="form-input" id="new-due">
+                <label>&#128279; Link (URL)</label>
+                <input type="url" class="form-input" id="new-link" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label>&#128206; Attachments</label>
+                <div class="new-attachments-section">
+                    <div class="new-attachments-list" id="new-attachments-list"></div>
+                    <div class="new-attach-buttons">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showNewAttachBrowser('workspace')">&#128193; Workspace</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showNewAttachBrowser('s3')">&#9729; S3 Backup</button>
+                    </div>
+                </div>
+            </div>
+            <div class="new-file-browser" id="new-file-browser" style="display:none">
+                <div class="file-browser-header">
+                    <span id="new-browser-source-label">Workspace</span>
+                    <button type="button" class="btn-close-browser" onclick="hideNewFileBrowser()">&times;</button>
+                </div>
+                <div class="file-path-input">
+                    <input type="text" class="form-input" id="new-browse-path" placeholder="/" value="/">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="browseNewPath()">Go</button>
+                </div>
+                <div class="file-list" id="new-file-list"></div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="hideNewFileBrowser()">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addNewAttachments()">Add Selected</button>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -3923,6 +3972,9 @@ var currentTask=null;
 var fileSource='workspace';
 var selectedFiles=[];
 var editingDesc=false;
+var newAttachments=[];
+var newFileSource='workspace';
+var newSelectedFiles=[];
 
 marked.setOptions({breaks:true,gfm:true,headerIds:false,mangle:false});
 
@@ -3989,8 +4041,9 @@ function renderTasks(){
     tasks.forEach(t=>{
         var done=t.status==='completed';
         var dueClass='';
-        if(t.due_date&&!done){
-            var due=new Date(t.due_date);
+        var endDate=t.due_date||t.end_date;
+        if(endDate&&!done){
+            var due=new Date(endDate);
             var today=new Date();today.setHours(0,0,0,0);
             if(due<today)dueClass='overdue';
         }
@@ -4004,7 +4057,9 @@ function renderTasks(){
         html+='<div class="task-meta">';
         html+='<span class="task-tag '+t.priority+'">'+t.priority.charAt(0).toUpperCase()+t.priority.slice(1)+'</span>';
         html+='<span class="task-tag status">'+t.status.replace('_',' ')+'</span>';
-        if(t.due_date)html+='<span class="task-due '+dueClass+'">&#128197; '+formatDate(t.due_date)+'</span>';
+        if(t.start_date)html+='<span class="task-due">&#128197; '+formatDateTime(t.start_date)+'</span>';
+        if(endDate)html+='<span class="task-due '+dueClass+'">&#128198; '+formatDateTime(endDate)+'</span>';
+        if(t.link)html+='<span class="task-attachments">&#128279;</span>';
         if(t.assignee&&t.assignee!==currentUser)html+='<span class="task-assignee">&#128100; '+t.assignee+'</span>';
         if(t.creator&&t.creator!==currentUser)html+='<span class="task-assignee">&#128228; '+t.creator+'</span>';
         if(t.attachments&&t.attachments.length)html+='<span class="task-attachments">&#128206; '+t.attachments.length+'</span>';
@@ -4018,10 +4073,104 @@ function showNewTask(){
     document.getElementById('new-desc').value='';
     document.getElementById('new-assignee').value='';
     document.getElementById('new-priority').value='medium';
-    document.getElementById('new-due').value='';
+    document.getElementById('new-start').value='';
+    document.getElementById('new-end').value='';
+    document.getElementById('new-link').value='';
+    newAttachments=[];
+    newSelectedFiles=[];
+    renderNewAttachments();
+    hideNewFileBrowser();
     document.getElementById('new-task-modal').classList.add('show');
 }
-function hideNewTaskModal(){document.getElementById('new-task-modal').classList.remove('show');}
+function hideNewTaskModal(){
+    document.getElementById('new-task-modal').classList.remove('show');
+    hideNewFileBrowser();
+}
+
+function renderNewAttachments(){
+    var list=document.getElementById('new-attachments-list');
+    if(!newAttachments.length){
+        list.innerHTML='<span style="color:#64748b;font-size:12px">No attachments</span>';
+        return;
+    }
+    var html='';
+    newAttachments.forEach((a,i)=>{
+        var icon=a.type==='dir'?'&#128193;':a.source==='s3'?'&#9729;':'&#128196;';
+        html+='<div class="new-attach-item"><span class="icon">'+icon+'</span><span class="name" title="'+escapeHtml(a.path)+'">'+escapeHtml(a.name)+'</span><button class="remove" onclick="removeNewAttachment('+i+')">&times;</button></div>';
+    });
+    list.innerHTML=html;
+}
+
+function removeNewAttachment(idx){
+    newAttachments.splice(idx,1);
+    renderNewAttachments();
+}
+
+function showNewAttachBrowser(source){
+    newFileSource=source;
+    newSelectedFiles=[];
+    document.getElementById('new-browser-source-label').textContent=source==='s3'?'S3 Backup':'Workspace';
+    document.getElementById('new-browse-path').value='/';
+    document.getElementById('new-file-browser').style.display='block';
+    browseNewPath();
+}
+
+function hideNewFileBrowser(){
+    document.getElementById('new-file-browser').style.display='none';
+}
+
+function browseNewPath(){
+    var path=document.getElementById('new-browse-path').value||'/';
+    var url=newFileSource==='s3'?'/api/s3/list?path='+encodeURIComponent(path):'/api/workspace/list?path='+encodeURIComponent(path);
+    fetch(url).then(r=>r.json()).then(d=>{
+        var list=document.getElementById('new-file-list');
+        var items=d.files||d.items||[];
+        if(!items.length){
+            list.innerHTML='<div style="padding:20px;text-align:center;color:#64748b">Empty folder</div>';
+            return;
+        }
+        var html='';
+        if(path!=='/'){
+            var parent=path.split('/').slice(0,-1).join('/')||'/';
+            html+='<div class="file-item" onclick="document.getElementById(\\'new-browse-path\\').value=\\''+parent+'\\';browseNewPath()"><span class="icon">&#128193;</span><span class="name">..</span></div>';
+        }
+        items.forEach(f=>{
+            var isDir=f.type==='dir'||f.is_dir;
+            var icon=isDir?'&#128193;':'&#128196;';
+            var fullPath=(path==='/'?'':path)+'/'+f.name;
+            var sel=newSelectedFiles.find(x=>x.path===fullPath)?'selected':'';
+            html+='<div class="file-item '+sel+'" onclick="toggleNewFileSelect(\\''+fullPath+'\\',\\''+escapeHtml(f.name)+'\\','+(isDir?'true':'false')+',this)">';
+            html+='<span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span>';
+            if(isDir)html+='<span style="margin-left:auto;color:#64748b;font-size:11px">folder</span>';
+            html+='</div>';
+        });
+        list.innerHTML=html;
+    }).catch(e=>{
+        document.getElementById('new-file-list').innerHTML='<div style="padding:20px;text-align:center;color:#ef4444">Error loading</div>';
+    });
+}
+
+function toggleNewFileSelect(path,name,isDir,el){
+    var idx=newSelectedFiles.findIndex(x=>x.path===path);
+    if(idx>=0){
+        newSelectedFiles.splice(idx,1);
+        el.classList.remove('selected');
+    }else{
+        newSelectedFiles.push({path:path,name:name,source:newFileSource,type:isDir?'dir':'file'});
+        el.classList.add('selected');
+    }
+}
+
+function addNewAttachments(){
+    newSelectedFiles.forEach(f=>{
+        if(!newAttachments.find(a=>a.path===f.path&&a.source===f.source)){
+            newAttachments.push(f);
+        }
+    });
+    newSelectedFiles=[];
+    renderNewAttachments();
+    hideNewFileBrowser();
+}
 
 function createTask(){
     var data={
@@ -4029,7 +4178,10 @@ function createTask(){
         description:document.getElementById('new-desc').value.trim(),
         assignee:document.getElementById('new-assignee').value,
         priority:document.getElementById('new-priority').value,
-        due_date:document.getElementById('new-due').value||null
+        start_date:document.getElementById('new-start').value||null,
+        due_date:document.getElementById('new-end').value||null,
+        link:document.getElementById('new-link').value.trim()||null,
+        attachments:newAttachments.length?newAttachments:null
     };
     if(!data.title){showToast('Title is required','error');return;}
     fetch('/api/todos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
@@ -4065,11 +4217,19 @@ function renderDetail(t){
         html+='<option value="'+p+'"'+(t.priority===p?' selected':'')+'>'+p+'</option>';
     });
     html+='</select></div>';
-    html+='<div class="meta-item"><span class="label">Due:</span><input type="date" value="'+(t.due_date?t.due_date.split('T')[0]:'')+'" onchange="updateField(\\'due_date\\',this.value)"'+(canEdit?'':' disabled')+'></div>';
+    html+='</div>';
+    html+='<div class="detail-meta-row">';
+    html+='<div class="meta-item"><span class="label">&#128197; Start:</span><input type="datetime-local" value="'+(t.start_date?t.start_date.slice(0,16):'')+'" onchange="updateField(\\'start_date\\',this.value)"'+(canEdit?'':' disabled')+'></div>';
+    html+='<div class="meta-item"><span class="label">&#128198; End:</span><input type="datetime-local" value="'+(t.due_date?t.due_date.slice(0,16):'')+'" onchange="updateField(\\'due_date\\',this.value)"'+(canEdit?'':' disabled')+'></div>';
     html+='</div>';
 
     if(t.assignee)html+='<div class="meta-item" style="margin-bottom:16px"><span class="label">Assigned to:</span><span class="value">'+t.assignee+'</span></div>';
     if(t.creator&&t.creator!==currentUser)html+='<div class="meta-item" style="margin-bottom:16px"><span class="label">Created by:</span><span class="value">'+t.creator+'</span></div>';
+
+    if(t.link){
+        html+='<div class="detail-section"><div class="detail-section-header"><span>&#128279; Link</span></div>';
+        html+='<a href="'+escapeHtml(t.link)+'" target="_blank" style="color:#6366f1;font-size:13px;word-break:break-all">'+escapeHtml(t.link)+'</a></div>';
+    }
 
     html+='<div class="detail-section">';
     html+='<div class="detail-section-header"><span>&#128221; Description</span>';
@@ -4087,7 +4247,7 @@ function renderDetail(t){
     html+='<div class="attachments-list">';
     if(t.attachments&&t.attachments.length){
         t.attachments.forEach((a,i)=>{
-            var icon=a.source==='s3'?'&#9729;':a.source==='upload'?'&#128196;':'&#128193;';
+            var icon=a.type==='dir'?'&#128193;':a.source==='s3'?'&#9729;':'&#128196;';
             html+='<div class="attachment-item">';
             html+='<span class="icon">'+icon+'</span>';
             html+='<div class="info"><div class="name">'+escapeHtml(a.name)+'</div><div class="source">'+a.source+': '+escapeHtml(a.path||'')+'</div></div>';
@@ -4193,14 +4353,19 @@ function downloadTask(){
     var md='# '+currentTask.title+'\\n\\n';
     md+='**Status:** '+currentTask.status+'\\n';
     md+='**Priority:** '+currentTask.priority+'\\n';
-    if(currentTask.due_date)md+='**Due:** '+currentTask.due_date.split('T')[0]+'\\n';
+    if(currentTask.start_date)md+='**Start:** '+currentTask.start_date+'\\n';
+    if(currentTask.due_date)md+='**End:** '+currentTask.due_date+'\\n';
     if(currentTask.assignee)md+='**Assignee:** '+currentTask.assignee+'\\n';
     md+='**Created by:** '+currentTask.creator+'\\n\\n';
+    if(currentTask.link)md+='**Link:** '+currentTask.link+'\\n\\n';
     md+='---\\n\\n';
     md+='## Description\\n\\n'+(currentTask.description||'_No description_')+'\\n\\n';
     if(currentTask.attachments&&currentTask.attachments.length){
         md+='## Attachments\\n\\n';
-        currentTask.attachments.forEach(a=>{md+='- '+a.name+' ('+a.source+': '+a.path+')\\n';});
+        currentTask.attachments.forEach(a=>{
+            var type=a.type==='dir'?'folder':'file';
+            md+='- ['+type+'] '+a.name+' ('+a.source+': '+a.path+')\\n';
+        });
         md+='\\n';
     }
     if(currentTask.comments&&currentTask.comments.length){
@@ -4263,12 +4428,16 @@ function browsePath(){
             var isDir=f.type==='dir'||f.is_dir;
             var icon=isDir?'&#128193;':'&#128196;';
             var fullPath=(path==='/'?'':path)+'/'+f.name;
+            var sel=selectedFiles.find(x=>x.path===fullPath)?'selected':'';
+            html+='<div class="file-item '+sel+'">';
             if(isDir){
-                html+='<div class="file-item" onclick="document.getElementById(\\'browse-path\\').value=\\''+fullPath+'\\';browsePath()"><span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span></div>';
+                html+='<span class="icon" onclick="event.stopPropagation();document.getElementById(\\'browse-path\\').value=\\''+fullPath+'\\';browsePath()" style="cursor:pointer" title="Open folder">'+icon+'</span>';
             }else{
-                var sel=selectedFiles.find(x=>x.path===fullPath)?'selected':'';
-                html+='<div class="file-item '+sel+'" onclick="toggleFileSelect(\\''+fullPath+'\\',\\''+escapeHtml(f.name)+'\\',this)"><span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span><span class="path">'+escapeHtml(fullPath)+'</span></div>';
+                html+='<span class="icon">'+icon+'</span>';
             }
+            html+='<span class="name" onclick="toggleFileSelect(\\''+fullPath+'\\',\\''+escapeHtml(f.name)+'\\','+(isDir?'true':'false')+',this.parentElement)" style="flex:1;cursor:pointer">'+escapeHtml(f.name)+'</span>';
+            if(isDir)html+='<span style="color:#64748b;font-size:11px;margin-right:8px">folder</span>';
+            html+='</div>';
         });
         list.innerHTML=html;
     }).catch(e=>{
@@ -4276,13 +4445,13 @@ function browsePath(){
     });
 }
 
-function toggleFileSelect(path,name,el){
+function toggleFileSelect(path,name,isDir,el){
     var idx=selectedFiles.findIndex(x=>x.path===path);
     if(idx>=0){
         selectedFiles.splice(idx,1);
         el.classList.remove('selected');
     }else{
-        selectedFiles.push({path:path,name:name,source:fileSource});
+        selectedFiles.push({path:path,name:name,source:fileSource,type:isDir?'dir':'file'});
         el.classList.add('selected');
     }
 }
