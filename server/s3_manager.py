@@ -238,21 +238,24 @@ def _do_transfer(task_id, username, config, source, dest, items, source_path, de
     bucket = config['bucket_name']
     base_prefix = config.get('prefix', '').strip('/')
 
-    try:
-        for i, item_name in enumerate(items):
-            task['current_file'] = item_name
-            task['completed'] = i
-
+    errors = []
+    for i, item_name in enumerate(items):
+        task['current_file'] = item_name
+        task['completed'] = i
+        try:
             if source == 'workspace' and dest == 's3':
                 _upload_item(client, bucket, base_prefix, username, source_path, dest_path, item_name, task)
             elif source == 's3' and dest == 'workspace':
                 _download_item(client, bucket, base_prefix, username, source_path, dest_path, item_name, task)
+        except Exception as e:
+            errors.append(f"{item_name}: {e}")
 
-        task['completed'] = total
-        task['status'] = 'done'
-    except Exception as e:
+    task['completed'] = total
+    if errors:
         task['status'] = 'error'
-        task['error'] = str(e)
+        task['error'] = f"{len(errors)} error(s): {errors[0]}"
+    else:
+        task['status'] = 'done'
 
 
 def _upload_item(client, bucket, base_prefix, username, src_path, dst_path, item_name, task):
@@ -278,14 +281,22 @@ def _upload_item(client, bucket, base_prefix, username, src_path, dst_path, item
 
 
 def _upload_file(client, bucket, local_path, s3_key, task):
-    """Upload single file, use multipart for large files"""
+    """Upload single file, use put_object for compatibility"""
     size = os.path.getsize(local_path)
+    task['current_file'] = os.path.basename(local_path)
     if size > MULTIPART_THRESHOLD:
+        # Multipart upload for large files
         from boto3.s3.transfer import TransferConfig
-        config = TransferConfig(multipart_threshold=MULTIPART_THRESHOLD, max_concurrency=4)
+        config = TransferConfig(
+            multipart_threshold=MULTIPART_THRESHOLD,
+            max_concurrency=4,
+            multipart_chunksize=8 * 1024 * 1024,
+        )
         client.upload_file(local_path, bucket, s3_key, Config=config)
     else:
-        client.upload_file(local_path, bucket, s3_key)
+        # Use put_object with explicit ContentLength for S3-compatible services
+        with open(local_path, 'rb') as f:
+            client.put_object(Bucket=bucket, Key=s3_key, Body=f, ContentLength=size)
 
 
 def _download_item(client, bucket, base_prefix, username, src_path, dst_path, item_name, task):
