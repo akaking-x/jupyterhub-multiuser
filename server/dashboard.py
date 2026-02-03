@@ -5,7 +5,7 @@ JupyterHub Multi-User Dashboard
 A Flask-based dashboard for managing JupyterLab instances
 """
 
-from flask import Flask, render_template_string, request, session, redirect, Response, jsonify
+from flask import Flask, render_template_string, request, session, redirect, Response, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import subprocess
 import uuid
@@ -394,6 +394,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     {% if has_s3 %}<div class="desktop-icon" ondblclick="openWindow('myshares')"><div class="icon">&#128279;</div><div class="label">My Shares</div></div>{% endif %}
     <div class="desktop-icon" ondblclick="openWindow('usershares')"><div class="icon">&#128229;</div><div class="label">User Shares</div></div>
     <div class="desktop-icon" ondblclick="openWindow('chat')"><div class="icon">&#128172;</div><div class="label">Chat</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('balatro')"><div class="icon">&#127183;</div><div class="label">Balatro</div></div>
     <div class="desktop-icon" ondblclick="openWindow('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
 </div>
 <div class="snap-preview" id="snap-preview"></div>
@@ -427,7 +428,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:500,h:600},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:500,h:600},balatro:{title:'Balatro',icon:'&#127183;',url:'/balatro/',w:1320,h:800},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -3276,6 +3277,28 @@ def embed_chat():
         return redirect('/')
     username = session['user']
     return render_template_string(EMBED_CHAT, username=username)
+
+
+# ===========================================
+# Balatro Game (Static files)
+# ===========================================
+
+BALATRO_DIR = '/opt/jupyterhub/static/balatro'
+
+@app.route('/balatro/')
+def balatro_index():
+    """Serve Balatro game"""
+    if not session.get('user'):
+        return redirect('/')
+    return send_from_directory(BALATRO_DIR, 'index.html')
+
+@app.route('/balatro/<path:filename>')
+def balatro_static(filename):
+    """Serve Balatro static files"""
+    if not session.get('user'):
+        return 'Unauthorized', 401
+    return send_from_directory(BALATRO_DIR, filename)
+
 
 @app.route('/embed/s3-config', methods=['GET', 'POST'])
 def embed_s3_config():
