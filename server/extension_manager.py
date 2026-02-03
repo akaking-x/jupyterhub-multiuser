@@ -40,14 +40,20 @@ POPULAR_EXTENSIONS = [
 ]
 
 
+def _strip_ansi(text):
+    """Remove ANSI escape codes from text"""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+
 def list_extensions():
     """List installed JupyterLab extensions"""
     result = subprocess.run(
         [JUPYTER, 'labextension', 'list'],
         capture_output=True, text=True, timeout=30
     )
+    output = _strip_ansi(result.stdout + result.stderr)
     extensions = []
-    for line in (result.stdout + result.stderr).splitlines():
+    for line in output.splitlines():
         line = line.strip()
         # Match lines like: @jupyterlab/some-ext v4.0.0 enabled OK
         m = re.match(r'^(\S+)\s+v?([\d.]+\S*)\s+(enabled|disabled)', line)

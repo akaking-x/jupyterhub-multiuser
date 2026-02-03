@@ -554,16 +554,17 @@ function doSearch() {
         }
         var html = '<div class="ext-grid">';
         data.forEach(function(ext){
+            var pkg = ext.package.replace(/'/g, '&#39;');
             html += '<div class="ext-card">' +
-                '<h4>'+ext.package+'</h4>' +
+                '<h4>'+pkg+'</h4>' +
                 '<div class="ext-pkg">v'+ext.version+'</div>' +
                 '<p>'+(ext.desc||'No description')+'</p>' +
                 '<div class="ext-actions">';
             if (ext.installed) {
                 html += '<span class="tag tag-green">Installed</span>' +
-                    '<form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm(\'Uninstall '+ext.package+'?\')"><input type="hidden" name="package" value="'+ext.package+'"><button class="btn btn-danger btn-sm">Uninstall</button></form>';
+                    '<form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm(&quot;Uninstall '+pkg+'?&quot;)"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-danger btn-sm">Uninstall</button></form>';
             } else {
-                html += '<form method="post" action="/admin/extensions/install" style="display:inline"><input type="hidden" name="package" value="'+ext.package+'"><button class="btn btn-success btn-sm">Install</button></form>';
+                html += '<form method="post" action="/admin/extensions/install" style="display:inline"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-success btn-sm">Install</button></form>';
             }
             html += '</div></div>';
         });
