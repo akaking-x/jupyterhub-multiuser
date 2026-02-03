@@ -6,7 +6,9 @@ A Flask-based dashboard for managing JupyterLab instances
 """
 
 from flask import Flask, render_template_string, request, session, redirect, Response, jsonify
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import subprocess
+import uuid
 import secrets
 import string
 import pam
@@ -36,10 +38,14 @@ from s3_manager import (
     start_transfer, get_transfer_status,
     get_shared_s3_config, list_s3_recursive,
     stream_s3_object, stream_s3_folder_as_zip, read_s3_text,
+    move_s3_items, copy_s3_to_workspace,
 )
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+
+# SocketIO for realtime chat
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # OnlyOffice Configuration
 ONLYOFFICE_URL = os.environ.get('ONLYOFFICE_URL', '/onlyoffice')
@@ -382,9 +388,12 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 </head><body>
 <div class="desktop">
     <div class="desktop-icon" ondblclick="openWindow('jupyterlab')"><div class="icon">&#128187;</div><div class="label">JupyterLab</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('workspace')"><div class="icon">&#128193;</div><div class="label">Workspace</div></div>
     {% if has_s3 %}<div class="desktop-icon" ondblclick="openWindow('s3backup')"><div class="icon">&#9729;</div><div class="label">S3 Backup</div></div>{% endif %}
     {% if has_shared %}<div class="desktop-icon" ondblclick="openWindow('shared')"><div class="icon">&#128101;</div><div class="label">Shared Space</div></div>{% endif %}
     {% if has_s3 %}<div class="desktop-icon" ondblclick="openWindow('myshares')"><div class="icon">&#128279;</div><div class="label">My Shares</div></div>{% endif %}
+    <div class="desktop-icon" ondblclick="openWindow('usershares')"><div class="icon">&#128229;</div><div class="label">User Shares</div></div>
+    <div class="desktop-icon" ondblclick="openWindow('chat')"><div class="icon">&#128172;</div><div class="label">Chat</div></div>
     <div class="desktop-icon" ondblclick="openWindow('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
 </div>
 <div class="snap-preview" id="snap-preview"></div>
@@ -401,9 +410,12 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section">
         <div class="menu-section-title">Applications</div>
         <a class="menu-item" href="#" onclick="openWindow('jupyterlab');hideStartMenu()"><span class="icon">&#128187;</span><div class="text"><span>JupyterLab</span><small>Data Science IDE</small></div></a>
+        <a class="menu-item" href="#" onclick="openWindow('workspace');hideStartMenu()"><span class="icon">&#128193;</span><div class="text"><span>Workspace</span><small>File Manager</small></div></a>
         {% if has_s3 %}<a class="menu-item" href="#" onclick="openWindow('s3backup');hideStartMenu()"><span class="icon">&#9729;</span><div class="text"><span>S3 Backup</span><small>Backup & Restore</small></div></a>{% endif %}
         {% if has_shared %}<a class="menu-item" href="#" onclick="openWindow('shared');hideStartMenu()"><span class="icon">&#128101;</span><div class="text"><span>Shared Space</span><small>Team Storage</small></div></a>{% endif %}
         {% if has_s3 %}<a class="menu-item" href="#" onclick="openWindow('myshares');hideStartMenu()"><span class="icon">&#128279;</span><div class="text"><span>My Shares</span><small>Shared Links</small></div></a>{% endif %}
+        <a class="menu-item" href="#" onclick="openWindow('usershares');hideStartMenu()"><span class="icon">&#128229;</span><div class="text"><span>User Shares</span><small>Shared with you</small></div></a>
+        <a class="menu-item" href="#" onclick="openWindow('chat');hideStartMenu()"><span class="icon">&#128172;</span><div class="text"><span>Chat</span><small>Message users</small></div></a>
     </div>
     <div class="menu-divider"></div>
     <div class="menu-section">
@@ -415,7 +427,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
     <div class="menu-section"><a class="menu-item danger" href="/logout"><span class="icon">&#128682;</span><div class="text"><span>Logout</span><small>Sign out</small></div></a></div>
 </div>
 <script>
-const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
+const APPS={jupyterlab:{title:'JupyterLab',icon:'&#128187;',url:'/embed/lab',w:1200,h:700},workspace:{title:'Workspace',icon:'&#128193;',url:'/embed/workspace',w:900,h:600},s3backup:{title:'S3 Backup',icon:'&#9729;',url:'/embed/s3-backup',w:1100,h:650},shared:{title:'Shared Space',icon:'&#128101;',url:'/embed/shared-space',w:1100,h:650},myshares:{title:'My Shares',icon:'&#128279;',url:'/embed/my-shares',w:900,h:600},usershares:{title:'User Shares',icon:'&#128229;',url:'/embed/user-shares',w:900,h:600},chat:{title:'Chat',icon:'&#128172;',url:'/embed/chat',w:500,h:600},settings:{title:'S3 Config',icon:'&#9881;',url:'/embed/s3-config',w:700,h:550},password:{title:'Change Password',icon:'&#128274;',url:'/embed/change-password',w:500,h:450}};
 const FILE_ICONS={'image':'&#128444;','video':'&#127916;','audio':'&#127925;','text':'&#128196;','markdown':'&#128221;','html':'&#127760;','pdf':'&#128462;','office':'&#128196;','unknown':'&#128196;'};
 let wins={},zIdx=100,drag=null,fileWinCounter=0;
 let splitV=50,splitH=50; // vertical and horizontal split percentages
@@ -1857,7 +1869,14 @@ setTimeout(check502, 3000);
 </script>
 </body></html>"""
 
-EMBED_S3_BACKUP = EMBED_CSS + """<!DOCTYPE html><html><head><title>S3 Backup</title></head><body>
+EMBED_S3_BACKUP = EMBED_CSS + """<!DOCTYPE html><html><head><title>S3 Backup</title>
+<style>
+.file-item[draggable="true"]{cursor:grab}
+.file-item.dragging{opacity:0.5}
+.file-item.drag-over-item{background:rgba(99,102,241,.3);border:1px dashed #6366f1;border-radius:4px}
+.breadcrumb-item.drag-over-bc{background:#6366f1;color:#fff;padding:2px 6px;border-radius:4px}
+</style>
+</head><body>
 <div class="container" style="padding:12px;height:100vh;overflow:hidden">
     <div class="split-pane">
         <div class="pane drop-zone" id="ws-pane" data-target="workspace">
@@ -1874,15 +1893,17 @@ EMBED_S3_BACKUP = EMBED_CSS + """<!DOCTYPE html><html><head><title>S3 Backup</ti
             <div class="upload-progress" id="ws-upload-progress" style="display:none"></div>
         </div>
         <div style="display:flex;flex-direction:column;justify-content:center;gap:8px;padding:0 4px">
-            <button class="btn btn-primary btn-sm" onclick="transferTo('s3')">&#10145;</button>
-            <button class="btn btn-success btn-sm" onclick="transferTo('workspace')">&#11013;</button>
+            <button class="btn btn-primary btn-sm" onclick="transferTo('s3')" title="Upload to S3">&#10145;</button>
+            <button class="btn btn-success btn-sm" onclick="transferTo('workspace')" title="Download to Workspace">&#11013;</button>
         </div>
         <div class="pane drop-zone" id="s3-pane" data-target="s3">
             <div class="pane-header">
                 <h3>&#9729; S3 Storage</h3>
                 <div style="display:flex;gap:4px">
                     <label class="btn btn-sm btn-success" style="cursor:pointer">&#11014;<input type="file" class="upload-input" id="s3-upload" multiple onchange="handleUpload('s3',this.files)"></label>
+                    <button class="btn btn-sm btn-warning" onclick="sendToLab()" title="Copy to Workspace root for JupyterLab">To Lab</button>
                     <button class="btn btn-sm btn-primary" onclick="s3Share()">Share</button>
+                    <button class="btn btn-sm" style="background:#8b5cf6;color:#fff" onclick="s3ShareWithUser()">&#128101;</button>
                     <button class="btn btn-sm btn-secondary" onclick="s3Mkdir()">+Folder</button>
                     <button class="btn btn-sm btn-danger" onclick="s3Delete()">Del</button>
                 </div>
@@ -1899,22 +1920,33 @@ EMBED_S3_BACKUP = EMBED_CSS + """<!DOCTYPE html><html><head><title>S3 Backup</ti
 </div>
 <script>
 var wsPath='',s3Path='';
+var dragData=null;
 function formatSize(b){if(b===0)return'-';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB';}
-function renderBreadcrumb(el,path,fn){var parts=path?path.split('/').filter(Boolean):[];var html='<a href="#" onclick="'+fn+'(\\'\\');return false">Home</a>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <a href="#" onclick="'+fn+'(\\''+acc+'\\');return false">'+p+'</a>';});document.getElementById(el).innerHTML=html;}
+function renderBreadcrumb(el,path,fn){var parts=path?path.split('/').filter(Boolean):[];var html='<a href="#" class="breadcrumb-item" data-path="" onclick="'+fn+'(\\'\\');return false">Home</a>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <a href="#" class="breadcrumb-item" data-path="'+acc+'" onclick="'+fn+'(\\''+acc+'\\');return false">'+p+'</a>';});document.getElementById(el).innerHTML=html;if(el==='s3-breadcrumb'){setupBreadcrumbDrop();}}
 function getFileIcon(name){var ext=(name.split('.').pop()||'').toLowerCase();var m={'jpg':'&#128444;','jpeg':'&#128444;','png':'&#128444;','gif':'&#128444;','webp':'&#128444;','svg':'&#128444;','bmp':'&#128444;','mp4':'&#127916;','webm':'&#127916;','mov':'&#127916;','avi':'&#127916;','mkv':'&#127916;','mp3':'&#127925;','wav':'&#127925;','flac':'&#127925;','m4a':'&#127925;','pdf':'&#128462;','doc':'&#128462;','docx':'&#128462;','xls':'&#128202;','xlsx':'&#128202;','ppt':'&#128253;','pptx':'&#128253;','md':'&#128221;','html':'&#127760;','htm':'&#127760;','py':'&#128196;','js':'&#128196;','json':'&#128196;','txt':'&#128196;','log':'&#128196;','zip':'&#128230;','rar':'&#128230;','7z':'&#128230;','tar':'&#128230;','gz':'&#128230;'};return m[ext]||'&#128196;';}
 function openFile(source,path,name){if(window.parent&&window.parent.openFileViewer){window.parent.openFileViewer(source,path,name);}else{window.open('/viewer/'+source+'?path='+encodeURIComponent(path),'_blank');}}
-function renderList(el,items,path,fn,isS3){var html='';var src=isS3?'s3':'workspace';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="'+fn+'(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+src+'\\',\\''+fpath+'\\',\\''+i.name+'\\');"';html+='<div class="file-item" '+click+'><input type="checkbox" value="'+i.name+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById(el).innerHTML=html||'<div class="empty">Empty</div>';}
+function renderList(el,items,path,fn,isS3){var html='';var src=isS3?'s3':'workspace';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var dragAttr=isS3?' draggable="true" ondragstart="onDragStart(event,\\''+i.name+'\\',\\''+i.type+'\\')" ondragend="onDragEnd(event)"':'';var dropAttr=isS3&&i.type==='dir'?' ondragover="onDragOverItem(event)" ondragleave="onDragLeaveItem(event)" ondrop="onDropItem(event,\\''+i.name+'\\')"':'';var click=i.type==='dir'?'onclick="'+fn+'(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+src+'\\',\\''+fpath+'\\',\\''+i.name+'\\');"';html+='<div class="file-item" data-name="'+i.name+'" data-type="'+i.type+'"'+dragAttr+dropAttr+' '+click+'><input type="checkbox" value="'+i.name+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById(el).innerHTML=html||'<div class="empty">Empty</div>';}
 function loadWs(p){wsPath=p||'';fetch('/api/workspace/list?path='+encodeURIComponent(wsPath)).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}renderBreadcrumb('ws-breadcrumb',wsPath,'loadWs');renderList('ws-list',d.items,wsPath,'loadWs',false);});}
 function loadS3(p){s3Path=p||'';fetch('/api/s3/list?path='+encodeURIComponent(s3Path)).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}renderBreadcrumb('s3-breadcrumb',s3Path,'loadS3');renderList('s3-list',d.items,s3Path,'loadS3',true);});}
 function getChecked(p){return Array.from(document.querySelectorAll('#'+(p==='s3'?'s3':'ws')+'-list input:checked')).map(b=>b.value);}
 function transferTo(dest){var src=dest==='s3'?'workspace':'s3';var items=getChecked(src==='workspace'?'ws':'s3');if(!items.length){alert('Select files');return;}fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src,dest:dest,items:items,source_path:src==='workspace'?wsPath:s3Path,dest_path:dest==='s3'?s3Path:wsPath})}).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}pollProgress(d.task_id);});}
-function pollProgress(tid){var el=document.getElementById('transfer-progress');el.style.display='block';var iv=setInterval(function(){fetch('/api/transfer/status/'+tid).then(r=>r.json()).then(d=>{var pct=d.total?Math.round(d.completed/d.total*100):0;document.getElementById('progress-fill').style.width=pct+'%';document.getElementById('progress-text').textContent=d.current_file?'Transferring: '+d.current_file+' ('+d.completed+'/'+d.total+')':'Preparing...';if(d.status==='done'){clearInterval(iv);document.getElementById('progress-text').textContent='Done!';loadWs(wsPath);loadS3(s3Path);}else if(d.status==='error'){clearInterval(iv);document.getElementById('progress-text').textContent='Error: '+d.error;}});},1000);}
+function pollProgress(tid,cb){var el=document.getElementById('transfer-progress');el.style.display='block';var iv=setInterval(function(){fetch('/api/transfer/status/'+tid).then(r=>r.json()).then(d=>{var pct=d.total?Math.round(d.completed/d.total*100):0;document.getElementById('progress-fill').style.width=pct+'%';document.getElementById('progress-text').textContent=d.current_file?'Transferring: '+d.current_file+' ('+d.completed+'/'+d.total+')':'Preparing...';if(d.status==='done'){clearInterval(iv);document.getElementById('progress-text').textContent='Done!';loadWs(wsPath);loadS3(s3Path);if(cb)cb();}else if(d.status==='error'){clearInterval(iv);document.getElementById('progress-text').textContent='Error: '+d.error;}});},1000);}
 function wsMkdir(){var n=prompt('Folder name:');if(!n)return;fetch('/api/workspace/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:(wsPath?wsPath+'/':'')+n})}).then(()=>loadWs(wsPath));}
 function s3Mkdir(){var n=prompt('Folder name:');if(!n)return;fetch('/api/s3/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:(s3Path?s3Path+'/':'')+n})}).then(()=>loadS3(s3Path));}
 function wsDelete(){var items=getChecked('ws');if(!items.length||!confirm('Delete?'))return;fetch('/api/workspace/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,path:wsPath})}).then(()=>loadWs(wsPath));}
 function s3Delete(){var items=getChecked('s3');if(!items.length||!confirm('Delete from S3?'))return;fetch('/api/s3/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,path:s3Path})}).then(()=>loadS3(s3Path));}
 function s3Share(){var items=getChecked('s3');if(items.length!==1){alert('Select 1 item');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var icon=fi?fi.querySelector('.file-icon').innerHTML:'';var type=icon.indexOf('128193')>=0?'dir':'file';var pw=prompt('Password (empty=none):');var hrs=prompt('Expire hours (0=never):');fetch('/api/share/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type:type,s3_path:s3Path,password:pw||'',expires_hours:parseInt(hrs)||0})}).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}prompt('Share link:',location.origin+'/share/'+d.share_id);});}
-document.querySelectorAll('.drop-zone').forEach(z=>{['dragenter','dragover'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();z.classList.add('drag-over');}));['dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();z.classList.remove('drag-over');}));z.addEventListener('drop',e=>{handleUpload(z.dataset.target,e.dataTransfer.files);});});
+function s3ShareWithUser(){var items=getChecked('s3');if(items.length!==1){alert('Select 1 item');return;}var name=items[0];var el=document.querySelector('#s3-list input[value="'+name+'"]');var fi=el?el.closest('.file-item'):null;var type=fi&&fi.dataset.type==='dir'?'dir':'file';var toUser=prompt('Share with username:');if(!toUser)return;var msg=prompt('Message (optional):','')||'';fetch('/api/share-with-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item_name:name,item_type:type,s3_path:s3Path,to_user:toUser,message:msg})}).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}alert('Shared with '+toUser+'!');});}
+function sendToLab(){var items=getChecked('s3');if(!items.length){alert('Select files to send to JupyterLab');return;}fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'s3',dest:'workspace',items:items,source_path:s3Path,dest_path:''})}).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}pollProgress(d.task_id,function(){try{var labFrame=window.parent.document.querySelector('#win-jupyterlab iframe');if(labFrame&&labFrame.contentWindow){labFrame.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');}}catch(e){}});});}
+// S3 drag and drop within folders
+function onDragStart(e,name,type){dragData={name:name,type:type,sourcePath:s3Path};e.target.classList.add('dragging');e.dataTransfer.effectAllowed=e.ctrlKey?'copy':'move';e.dataTransfer.setData('text/plain',name);}
+function onDragEnd(e){e.target.classList.remove('dragging');dragData=null;document.querySelectorAll('.drag-over-item,.drag-over-bc').forEach(el=>el.classList.remove('drag-over-item','drag-over-bc'));}
+function onDragOverItem(e){e.preventDefault();e.stopPropagation();e.currentTarget.classList.add('drag-over-item');e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';}
+function onDragLeaveItem(e){e.currentTarget.classList.remove('drag-over-item');}
+function onDropItem(e,folderName){e.preventDefault();e.stopPropagation();e.currentTarget.classList.remove('drag-over-item');if(!dragData)return;var destPath=s3Path?(s3Path+'/'+folderName):folderName;doS3Move([dragData.name],dragData.sourcePath,destPath,e.ctrlKey?'copy':'move');}
+function setupBreadcrumbDrop(){document.querySelectorAll('#s3-breadcrumb .breadcrumb-item').forEach(function(bc){bc.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();bc.classList.add('drag-over-bc');e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';});bc.addEventListener('dragleave',function(e){bc.classList.remove('drag-over-bc');});bc.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();bc.classList.remove('drag-over-bc');if(!dragData)return;var destPath=bc.dataset.path||'';if(destPath===dragData.sourcePath)return;doS3Move([dragData.name],dragData.sourcePath,destPath,e.ctrlKey?'copy':'move');});});}
+function doS3Move(items,srcPath,destPath,op){fetch('/api/s3/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,source_path:srcPath,dest_path:destPath,operation:op})}).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}loadS3(s3Path);});}
+document.querySelectorAll('.drop-zone').forEach(z=>{['dragenter','dragover'].forEach(e=>z.addEventListener(e,ev=>{if(ev.dataTransfer.types.includes('Files')){ev.preventDefault();z.classList.add('drag-over');}}));['dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{z.classList.remove('drag-over');}));z.addEventListener('drop',e=>{if(e.dataTransfer.files.length)handleUpload(z.dataset.target,e.dataTransfer.files);});});
 function handleUpload(t,files){if(!files.length)return;var prog=document.getElementById(t==='s3'?'s3-upload-progress':'ws-upload-progress');var path=t==='s3'?s3Path:wsPath;var ep=t==='s3'?'/api/s3/upload':'/api/workspace/upload';var total=files.length,done=0,errs=[];prog.style.display='block';prog.textContent='0/'+total;function next(i){if(i>=total){prog.textContent=errs.length?'Errors: '+errs[0]:'Done!';setTimeout(()=>prog.style.display='none',2000);t==='s3'?loadS3(s3Path):loadWs(wsPath);return;}var fd=new FormData();fd.append('file',files[i]);fd.append('path',path);fetch(ep,{method:'POST',body:fd}).then(r=>r.json()).then(d=>{done++;if(d.error)errs.push(files[i].name);prog.textContent=done+'/'+total;next(i+1);}).catch(()=>{done++;errs.push(files[i].name);next(i+1);});}next(0);document.getElementById(t==='s3'?'s3-upload':'ws-upload').value='';}
 loadWs('');loadS3('');
 </script></body></html>"""
@@ -2006,6 +2038,330 @@ function load(){
 }
 function copyLink(id){var url=location.origin+'/share/'+id;navigator.clipboard.writeText(url).then(()=>alert('Copied!')).catch(()=>prompt('Copy:',url));}
 function delShare(id){if(!confirm('Delete?'))return;fetch('/api/share/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({share_id:id})}).then(r=>r.json()).then(d=>{if(d.success)load();else alert(d.error);});}
+load();
+</script></body></html>"""
+
+# ===========================================
+# EMBED_WORKSPACE - Standalone file manager
+# ===========================================
+
+EMBED_WORKSPACE = EMBED_CSS + """<!DOCTYPE html><html><head><title>Workspace</title></head><body>
+<div class="container" style="padding:12px;height:100vh;overflow:hidden">
+    <div class="pane drop-zone" style="height:calc(100vh - 24px)" id="ws-pane" data-target="workspace">
+        <div class="pane-header">
+            <h3>&#128193; Workspace</h3>
+            <div style="display:flex;gap:4px">
+                <label class="btn btn-sm btn-success" style="cursor:pointer">&#11014; Upload<input type="file" class="upload-input" id="ws-upload" multiple onchange="handleUpload(this.files)"></label>
+                <button class="btn btn-sm btn-secondary" onclick="wsMkdir()">+Folder</button>
+                <button class="btn btn-sm btn-danger" onclick="wsDelete()">Delete</button>
+                <button class="btn btn-sm btn-primary" onclick="downloadSelected()">&#11015; Download</button>
+            </div>
+        </div>
+        <div class="breadcrumb" id="ws-breadcrumb"></div>
+        <div class="file-list" id="ws-list"></div>
+        <div class="upload-progress" id="ws-upload-progress" style="display:none"></div>
+    </div>
+</div>
+<script>
+var wsPath='';
+function formatSize(b){if(b===0)return'-';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB';}
+function renderBreadcrumb(path){var parts=path?path.split('/').filter(Boolean):[];var html='<a href="#" onclick="loadWs(\\'\\');return false">Home</a>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <a href="#" onclick="loadWs(\\''+acc+'\\');return false">'+p+'</a>';});document.getElementById('ws-breadcrumb').innerHTML=html;}
+function getFileIcon(name){var ext=(name.split('.').pop()||'').toLowerCase();var m={'jpg':'&#128444;','jpeg':'&#128444;','png':'&#128444;','gif':'&#128444;','webp':'&#128444;','svg':'&#128444;','bmp':'&#128444;','mp4':'&#127916;','webm':'&#127916;','mov':'&#127916;','avi':'&#127916;','mkv':'&#127916;','mp3':'&#127925;','wav':'&#127925;','flac':'&#127925;','m4a':'&#127925;','pdf':'&#128462;','doc':'&#128462;','docx':'&#128462;','xls':'&#128202;','xlsx':'&#128202;','ppt':'&#128253;','pptx':'&#128253;','md':'&#128221;','html':'&#127760;','htm':'&#127760;','py':'&#128196;','js':'&#128196;','json':'&#128196;','txt':'&#128196;','log':'&#128196;','zip':'&#128230;','rar':'&#128230;','7z':'&#128230;','tar':'&#128230;','gz':'&#128230;'};return m[ext]||'&#128196;';}
+function openFile(path,name){if(window.parent&&window.parent.openFileViewer){window.parent.openFileViewer('workspace',path,name);}else{window.open('/viewer/workspace?path='+encodeURIComponent(path),'_blank');}}
+function renderList(items,path){var html='';items.forEach(function(i){var icon=i.type==='dir'?'&#128193;':getFileIcon(i.name);var fpath=(path?path+'/':'')+i.name;var click=i.type==='dir'?'onclick="loadWs(\\''+fpath+'\\');"':'ondblclick="openFile(\\''+fpath+'\\',\\''+i.name+'\\');"';html+='<div class="file-item" '+click+'><input type="checkbox" value="'+i.name+'" data-type="'+i.type+'" onclick="event.stopPropagation()"><span class="file-icon">'+icon+'</span><span class="file-name">'+i.name+'</span><span class="file-size">'+formatSize(i.size)+'</span></div>';});document.getElementById('ws-list').innerHTML=html||'<div class="empty">Empty folder</div>';}
+function loadWs(p){wsPath=p||'';fetch('/api/workspace/list?path='+encodeURIComponent(wsPath)).then(r=>r.json()).then(d=>{if(d.error){alert(d.error);return;}renderBreadcrumb(wsPath);renderList(d.items,wsPath);});}
+function getChecked(){return Array.from(document.querySelectorAll('#ws-list input:checked')).map(b=>({name:b.value,type:b.dataset.type}));}
+function wsMkdir(){var n=prompt('Folder name:');if(!n)return;fetch('/api/workspace/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:(wsPath?wsPath+'/':'')+n})}).then(()=>loadWs(wsPath));}
+function wsDelete(){var items=getChecked().map(i=>i.name);if(!items.length||!confirm('Delete '+items.length+' item(s)?'))return;fetch('/api/workspace/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items,path:wsPath})}).then(()=>loadWs(wsPath));}
+function downloadSelected(){var items=getChecked();if(items.length!==1){alert('Select 1 file to download');return;}var item=items[0];if(item.type==='dir'){alert('Cannot download folder directly');return;}var fpath=(wsPath?wsPath+'/':'')+item.name;window.open('/api/workspace/download?path='+encodeURIComponent(fpath),'_blank');}
+document.querySelector('.drop-zone').addEventListener('dragover',e=>{e.preventDefault();e.currentTarget.classList.add('drag-over');});
+document.querySelector('.drop-zone').addEventListener('dragleave',e=>{e.currentTarget.classList.remove('drag-over');});
+document.querySelector('.drop-zone').addEventListener('drop',e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');handleUpload(e.dataTransfer.files);});
+function handleUpload(files){if(!files.length)return;var prog=document.getElementById('ws-upload-progress');var total=files.length,done=0,errs=[];prog.style.display='block';prog.textContent='0/'+total;function next(i){if(i>=total){prog.textContent=errs.length?'Errors: '+errs[0]:'Done!';setTimeout(()=>prog.style.display='none',2000);loadWs(wsPath);return;}var fd=new FormData();fd.append('file',files[i]);fd.append('path',wsPath);fetch('/api/workspace/upload',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{done++;if(d.error)errs.push(files[i].name);prog.textContent=done+'/'+total;next(i+1);}).catch(()=>{done++;errs.push(files[i].name);next(i+1);});}next(0);document.getElementById('ws-upload').value='';}
+loadWs('');
+</script></body></html>"""
+
+# ===========================================
+# EMBED_CHAT - Realtime chat with users
+# ===========================================
+
+EMBED_CHAT = EMBED_CSS + """<!DOCTYPE html><html><head><title>Chat</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+.chat-container{display:flex;height:calc(100vh - 24px);gap:12px}
+.user-list{width:200px;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.user-list-header{padding:12px;border-bottom:1px solid #334155;font-size:13px;font-weight:600}
+.user-list-items{flex:1;overflow-y:auto;padding:8px}
+.user-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px}
+.user-item:hover{background:#334155}
+.user-item.active{background:rgba(99,102,241,.3);border:1px solid #6366f1}
+.user-item .status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.user-item .status.online{background:#10b981}
+.user-item .status.offline{background:#64748b}
+.user-item .name{flex:1;overflow:hidden;text-overflow:ellipsis}
+.user-item .unread{background:#ef4444;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px}
+.chat-main{flex:1;background:#1e293b;border-radius:10px;border:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+.chat-header{padding:12px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;gap:10px}
+.chat-header .name{font-weight:600;font-size:14px}
+.chat-header .status{font-size:12px;color:#94a3b8}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.message{max-width:70%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.4}
+.message.sent{background:#6366f1;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.message.received{background:#334155;align-self:flex-start;border-bottom-left-radius:4px}
+.message .time{font-size:10px;opacity:0.7;margin-top:4px}
+.message.file{background:#0f172a;border:1px solid #334155}
+.message.file .file-info{display:flex;align-items:center;gap:8px}
+.message.file .file-icon{font-size:24px}
+.message.file .file-name{font-weight:500}
+.message.file .file-actions{margin-top:8px;display:flex;gap:6px}
+.chat-input{padding:12px;border-top:1px solid #334155;display:flex;gap:8px}
+.chat-input input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:13px}
+.chat-input input:focus{outline:none;border-color:#6366f1}
+.pending-bar{background:#f59e0b;color:#000;padding:8px 12px;font-size:12px;display:none}
+.pending-bar.show{display:flex;align-items:center;justify-content:space-between}
+.no-chat{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center}
+.no-chat .icon{font-size:60px;margin-bottom:16px;opacity:0.5}
+</style>
+</head><body>
+<div class="container" style="padding:12px;height:100vh;overflow:hidden">
+    <div class="chat-container">
+        <div class="user-list">
+            <div class="user-list-header">&#128101; Users</div>
+            <div class="user-list-items" id="user-list"></div>
+        </div>
+        <div class="chat-main">
+            <div class="pending-bar" id="pending-bar">
+                <span id="pending-text">1 file waiting</span>
+                <button class="btn btn-sm btn-success" onclick="showPending()">View</button>
+            </div>
+            <div id="chat-area">
+                <div class="no-chat"><div><div class="icon">&#128172;</div><div>Select a user to start chatting</div></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+var socket=io();
+var currentUser='{{ username }}';
+var selectedUser=null;
+var users={};
+var messages={};
+var unread={};
+var pendingFiles=[];
+
+socket.on('connect',function(){
+    console.log('Connected to chat');
+    socket.emit('get_online_users');
+});
+
+socket.on('user_list',function(data){
+    users=data.users||{};
+    renderUserList();
+});
+
+socket.on('user_status',function(data){
+    users[data.user]=data.status;
+    renderUserList();
+});
+
+socket.on('new_message',function(data){
+    var from=data.from_user;
+    if(!messages[from])messages[from]=[];
+    messages[from].push(data);
+    if(selectedUser===from){
+        renderMessages();
+        scrollToBottom();
+    }else{
+        unread[from]=(unread[from]||0)+1;
+        renderUserList();
+    }
+});
+
+socket.on('message_history',function(data){
+    messages[data.with_user]=data.messages||[];
+    renderMessages();
+    scrollToBottom();
+});
+
+socket.on('file_transfer_request',function(data){
+    pendingFiles.push(data);
+    updatePendingBar();
+});
+
+socket.on('file_accepted',function(data){
+    alert('File accepted: '+data.filename);
+});
+
+socket.on('file_rejected',function(data){
+    alert('File rejected: '+data.filename);
+});
+
+function renderUserList(){
+    var html='';
+    var allUsers=Object.keys(users).filter(u=>u!==currentUser).sort();
+    allUsers.forEach(function(u){
+        var online=users[u]==='online';
+        var unreadCount=unread[u]||0;
+        var active=selectedUser===u?'active':'';
+        html+='<div class="user-item '+active+'" onclick="selectUser(\\''+u+'\\')">';
+        html+='<span class="status '+(online?'online':'offline')+'"></span>';
+        html+='<span class="name">'+u+'</span>';
+        if(unreadCount)html+='<span class="unread">'+unreadCount+'</span>';
+        html+='</div>';
+    });
+    document.getElementById('user-list').innerHTML=html||'<div style="padding:20px;text-align:center;color:#64748b">No other users</div>';
+}
+
+function selectUser(u){
+    selectedUser=u;
+    unread[u]=0;
+    renderUserList();
+    socket.emit('get_messages',{with_user:u});
+    var online=users[u]==='online';
+    document.getElementById('chat-area').innerHTML='<div class="chat-header"><span class="name">'+u+'</span><span class="status">'+(online?'Online':'Offline')+'</span></div><div class="chat-messages" id="chat-messages"></div><div class="chat-input"><input type="text" id="msg-input" placeholder="Type a message..." onkeydown="if(event.key===\\'Enter\\')sendMsg()"><label class="btn btn-secondary btn-sm" style="cursor:pointer">&#128206;<input type="file" style="display:none" onchange="sendFile(this.files[0])"></label><button class="btn btn-primary btn-sm" onclick="sendMsg()">Send</button></div>';
+}
+
+function renderMessages(){
+    var msgs=messages[selectedUser]||[];
+    var html='';
+    msgs.forEach(function(m){
+        var sent=m.from_user===currentUser;
+        var time=new Date(m.created_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+        if(m.message_type==='file_transfer'){
+            var fi=m.file_info||{};
+            html+='<div class="message file '+(sent?'sent':'received')+'"><div class="file-info"><span class="file-icon">&#128196;</span><div><div class="file-name">'+fi.filename+'</div><div style="font-size:11px;color:#94a3b8">'+(fi.size?formatSize(fi.size):'')+'</div></div></div>';
+            if(!sent&&fi.pending_id&&fi.status==='pending'){
+                html+='<div class="file-actions"><button class="btn btn-success btn-sm" onclick="acceptFile(\\''+fi.pending_id+'\\')">Accept</button><button class="btn btn-danger btn-sm" onclick="rejectFile(\\''+fi.pending_id+'\\')">Reject</button></div>';
+            }
+            html+='<div class="time">'+time+'</div></div>';
+        }else{
+            html+='<div class="message '+(sent?'sent':'received')+'">'+escapeHtml(m.content)+'<div class="time">'+time+'</div></div>';
+        }
+    });
+    var el=document.getElementById('chat-messages');
+    if(el)el.innerHTML=html||'<div style="text-align:center;padding:40px;color:#64748b">No messages yet</div>';
+}
+
+function sendMsg(){
+    var input=document.getElementById('msg-input');
+    var text=input.value.trim();
+    if(!text||!selectedUser)return;
+    socket.emit('send_message',{to_user:selectedUser,content:text});
+    if(!messages[selectedUser])messages[selectedUser]=[];
+    messages[selectedUser].push({from_user:currentUser,to_user:selectedUser,content:text,message_type:'text',created_at:new Date().toISOString()});
+    renderMessages();
+    scrollToBottom();
+    input.value='';
+}
+
+function sendFile(file){
+    if(!file||!selectedUser)return;
+    alert('File sharing requires selecting from S3 Backup. Use the Share with User feature there.');
+}
+
+function acceptFile(pendingId){
+    socket.emit('accept_file',{pending_id:pendingId,dest_path:''});
+}
+
+function rejectFile(pendingId){
+    socket.emit('reject_file',{pending_id:pendingId});
+}
+
+function updatePendingBar(){
+    var bar=document.getElementById('pending-bar');
+    var text=document.getElementById('pending-text');
+    if(pendingFiles.length){
+        bar.classList.add('show');
+        text.textContent=pendingFiles.length+' file(s) pending';
+    }else{
+        bar.classList.remove('show');
+    }
+}
+
+function showPending(){
+    if(!pendingFiles.length)return;
+    var msg='Pending files:\\n';
+    pendingFiles.forEach(function(p,i){
+        msg+=(i+1)+'. '+p.filename+' from '+p.from_user+'\\n';
+    });
+    alert(msg);
+}
+
+function scrollToBottom(){
+    var el=document.getElementById('chat-messages');
+    if(el)el.scrollTop=el.scrollHeight;
+}
+
+function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
+function escapeHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+</script></body></html>"""
+
+# ===========================================
+# EMBED_USER_SHARES - Incoming shares from other users
+# ===========================================
+
+EMBED_USER_SHARES = EMBED_CSS + """<!DOCTYPE html><html><head><title>User Shares</title></head><body>
+<div class="container">
+    <div class="card">
+        <div class="card-header"><h2>&#128229; Incoming Shares</h2></div>
+        <div class="card-body" style="padding:0" id="incoming-content">Loading...</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+        <div class="card-header"><h2>&#128228; Sent Shares</h2></div>
+        <div class="card-body" style="padding:0" id="sent-content">Loading...</div>
+    </div>
+</div>
+<script>
+function load(){
+    fetch('/api/user-shares/incoming').then(r=>r.json()).then(d=>{
+        if(d.error){document.getElementById('incoming-content').innerHTML='<div class="empty">'+d.error+'</div>';return;}
+        if(!d.shares||!d.shares.length){document.getElementById('incoming-content').innerHTML='<div class="empty">No incoming shares</div>';return;}
+        var html='<table><thead><tr><th>From</th><th>Item</th><th>Type</th><th>Message</th><th>Actions</th></tr></thead><tbody>';
+        d.shares.forEach(s=>{
+            html+='<tr><td><strong>'+s.from_user+'</strong></td>';
+            html+='<td>'+s.item_name+'</td>';
+            html+='<td><span class="tag '+(s.item_type==='dir'?'tag-blue':'tag-green')+'">'+s.item_type+'</span></td>';
+            html+='<td style="font-size:12px;color:#94a3b8">'+(s.message||'-')+'</td>';
+            html+='<td><div class="actions">';
+            if(s.status==='pending'){
+                html+='<button class="btn btn-success btn-sm" onclick="acceptShare(\\''+s._id+'\\')">Accept</button>';
+                html+='<button class="btn btn-danger btn-sm" onclick="rejectShare(\\''+s._id+'\\')">Reject</button>';
+            }else{
+                html+='<span class="tag">'+(s.status==='accepted'?'Accepted':'Rejected')+'</span>';
+            }
+            html+='</div></td></tr>';
+        });
+        html+='</tbody></table>';
+        document.getElementById('incoming-content').innerHTML=html;
+    });
+    fetch('/api/user-shares/sent').then(r=>r.json()).then(d=>{
+        if(d.error){document.getElementById('sent-content').innerHTML='<div class="empty">'+d.error+'</div>';return;}
+        if(!d.shares||!d.shares.length){document.getElementById('sent-content').innerHTML='<div class="empty">No sent shares</div>';return;}
+        var html='<table><thead><tr><th>To</th><th>Item</th><th>Type</th><th>Status</th></tr></thead><tbody>';
+        d.shares.forEach(s=>{
+            html+='<tr><td><strong>'+s.to_user+'</strong></td>';
+            html+='<td>'+s.item_name+'</td>';
+            html+='<td><span class="tag '+(s.item_type==='dir'?'tag-blue':'tag-green')+'">'+s.item_type+'</span></td>';
+            html+='<td><span class="tag">'+(s.status||'pending')+'</span></td></tr>';
+        });
+        html+='</tbody></table>';
+        document.getElementById('sent-content').innerHTML=html;
+    });
+}
+function acceptShare(id){
+    var dest=prompt('Save to folder (leave empty for workspace root):','')||'';
+    fetch('/api/user-shares/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({share_id:id,dest_path:dest})}).then(r=>r.json()).then(d=>{
+        if(d.success){alert('File copied to workspace!');load();}
+        else alert(d.error||'Failed');
+    });
+}
+function rejectShare(id){
+    if(!confirm('Reject this share?'))return;
+    fetch('/api/user-shares/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({share_id:id})}).then(r=>r.json()).then(d=>{
+        if(d.success)load();
+        else alert(d.error||'Failed');
+    });
+}
 load();
 </script></body></html>"""
 
@@ -2449,6 +2805,25 @@ def embed_my_shares():
         return redirect('/')
     return render_template_string(EMBED_MY_SHARES)
 
+@app.route('/embed/workspace')
+def embed_workspace():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    return render_template_string(EMBED_WORKSPACE)
+
+@app.route('/embed/user-shares')
+def embed_user_shares():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    return render_template_string(EMBED_USER_SHARES)
+
+@app.route('/embed/chat')
+def embed_chat():
+    if not session.get('user') or session.get('is_admin'):
+        return redirect('/')
+    username = session['user']
+    return render_template_string(EMBED_CHAT, username=username)
+
 @app.route('/embed/s3-config', methods=['GET', 'POST'])
 def embed_s3_config():
     if not session.get('user') or session.get('is_admin'):
@@ -2856,6 +3231,37 @@ def api_s3_delete():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+@app.route('/api/s3/move', methods=['POST'])
+def api_s3_move():
+    """Move or copy items within S3"""
+    if not session.get('user') or session.get('is_admin'): return jsonify({'error': 'Unauthorized'}), 403
+    username = session['user']
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid request'})
+    items = data.get('items', [])
+    source_path = data.get('source_path', '')
+    dest_path = data.get('dest_path', '')
+    operation = data.get('operation', 'move')
+    if not items:
+        return jsonify({'error': 'No items specified'})
+    if operation not in ('move', 'copy'):
+        return jsonify({'error': 'Invalid operation'})
+    try:
+        db = get_db()
+        cfg = get_s3_config(db, username)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    if not cfg:
+        return jsonify({'error': 'No S3 configured'})
+    try:
+        success_count, errors = move_s3_items(cfg, items, source_path, dest_path, operation)
+        if errors:
+            return jsonify({'success': success_count > 0, 'moved': success_count, 'errors': errors})
+        return jsonify({'success': True, 'moved': success_count})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @app.route('/api/workspace/upload', methods=['POST'])
 def api_ws_upload():
     if not session.get('user') or session.get('is_admin'): return jsonify({'error': 'Unauthorized'}), 403
@@ -3014,6 +3420,280 @@ def api_shared_upload():
     if ok:
         return jsonify({'success': True, 'filename': result})
     return jsonify({'error': result})
+
+
+# ===========================================
+# User-to-User Shares (Share with specific users)
+# ===========================================
+
+def _init_user_shares_collection(db):
+    """Ensure indexes on user_shares collection"""
+    col = db.user_shares
+    col.create_index('from_user')
+    col.create_index('to_user')
+    col.create_index('status')
+    col.create_index('created_at')
+    return col
+
+def _init_notifications_collection(db):
+    """Ensure indexes on notifications collection with TTL"""
+    col = db.notifications
+    col.create_index('user')
+    col.create_index('is_read')
+    col.create_index('created_at', expireAfterSeconds=7*24*60*60)  # 7 days TTL
+    return col
+
+@app.route('/api/users/search')
+def api_users_search():
+    """Search users for sharing (excludes admin and self)"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    q = request.args.get('q', '').strip().lower()
+    current_user = session['user']
+
+    try:
+        db = get_db()
+        query = {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user}}
+        if q:
+            query['username'] = {'$regex': q, '$options': 'i'}
+
+        users = list(db.users.find(query, {'username': 1, '_id': 0}).limit(20))
+        return jsonify({'users': [u['username'] for u in users]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/share-with-user', methods=['POST'])
+def api_share_with_user():
+    """Share file/folder with another user"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    to_user = data.get('to_user', '').strip()
+    item_name = data.get('item_name', '')
+    item_type = data.get('item_type', 'file')  # file or dir
+    s3_key = data.get('s3_key', '')
+    message = data.get('message', '')
+
+    from_user = session['user']
+
+    if not to_user or not item_name or not s3_key:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    if to_user == from_user:
+        return jsonify({'error': 'Cannot share with yourself'}), 400
+
+    try:
+        db = get_db()
+
+        # Check recipient exists and is not admin
+        recipient = db.users.find_one({'username': to_user, 'role': {'$ne': 'admin'}})
+        if not recipient:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Get sender's S3 config
+        user_doc = db.users.find_one({'username': from_user})
+        s3_config = user_doc.get('s3_config') if user_doc else None
+        if not s3_config:
+            return jsonify({'error': 'S3 not configured'}), 400
+
+        _init_user_shares_collection(db)
+
+        share_id = str(uuid.uuid4())[:12]
+        share_doc = {
+            '_id': share_id,
+            'from_user': from_user,
+            'to_user': to_user,
+            'item_name': item_name,
+            'item_type': item_type,
+            's3_key': s3_key,
+            's3_config_snapshot': s3_config,
+            'status': 'pending',
+            'message': message,
+            'created_at': datetime.utcnow()
+        }
+
+        db.user_shares.insert_one(share_doc)
+
+        # Create notification
+        _init_notifications_collection(db)
+        db.notifications.insert_one({
+            'user': to_user,
+            'type': 'file_share',
+            'from_user': from_user,
+            'share_id': share_id,
+            'title': f'{from_user} shared "{item_name}" with you',
+            'is_read': False,
+            'created_at': datetime.utcnow()
+        })
+
+        # Emit via SocketIO if recipient is online
+        if socketio:
+            socketio.emit('new_share', {
+                'share_id': share_id,
+                'from_user': from_user,
+                'item_name': item_name,
+                'message': message
+            }, room=to_user)
+
+        return jsonify({'success': True, 'share_id': share_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user-shares/incoming')
+def api_user_shares_incoming():
+    """Get shares received by current user"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        shares = list(db.user_shares.find(
+            {'to_user': session['user']},
+            {'s3_config_snapshot': 0}
+        ).sort('created_at', -1).limit(50))
+
+        for s in shares:
+            s['_id'] = str(s['_id'])
+            s['created_at'] = s['created_at'].isoformat() if s.get('created_at') else None
+
+        return jsonify({'shares': shares})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user-shares/sent')
+def api_user_shares_sent():
+    """Get shares sent by current user"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        shares = list(db.user_shares.find(
+            {'from_user': session['user']},
+            {'s3_config_snapshot': 0}
+        ).sort('created_at', -1).limit(50))
+
+        for s in shares:
+            s['_id'] = str(s['_id'])
+            s['created_at'] = s['created_at'].isoformat() if s.get('created_at') else None
+
+        return jsonify({'shares': shares})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user-shares/accept', methods=['POST'])
+def api_user_shares_accept():
+    """Accept a share and copy to workspace"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    share_id = data.get('share_id', '')
+    dest_path = data.get('dest_path', '')  # Optional subfolder in workspace
+
+    try:
+        db = get_db()
+        share = db.user_shares.find_one({'_id': share_id, 'to_user': session['user']})
+
+        if not share:
+            return jsonify({'error': 'Share not found'}), 404
+
+        if share['status'] != 'pending':
+            return jsonify({'error': 'Share already processed'}), 400
+
+        # Copy from sender's S3 to recipient's workspace
+        ok, result = copy_s3_to_workspace(
+            share['s3_config_snapshot'],
+            share['s3_key'],
+            share['item_type'],
+            session['user'],
+            dest_path,
+            share['item_name']
+        )
+
+        if ok:
+            db.user_shares.update_one(
+                {'_id': share_id},
+                {'$set': {'status': 'accepted', 'accepted_at': datetime.utcnow()}}
+            )
+            return jsonify({'success': True, 'path': result})
+        else:
+            return jsonify({'error': result}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user-shares/reject', methods=['POST'])
+def api_user_shares_reject():
+    """Reject a share"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    share_id = data.get('share_id', '')
+
+    try:
+        db = get_db()
+        result = db.user_shares.update_one(
+            {'_id': share_id, 'to_user': session['user'], 'status': 'pending'},
+            {'$set': {'status': 'rejected', 'rejected_at': datetime.utcnow()}}
+        )
+
+        if result.modified_count:
+            return jsonify({'success': True})
+        return jsonify({'error': 'Share not found or already processed'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications')
+def api_notifications():
+    """Get user notifications"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        notifs = list(db.notifications.find(
+            {'user': session['user']}
+        ).sort('created_at', -1).limit(50))
+
+        for n in notifs:
+            n['_id'] = str(n['_id'])
+            n['created_at'] = n['created_at'].isoformat() if n.get('created_at') else None
+
+        unread = db.notifications.count_documents({'user': session['user'], 'is_read': False})
+
+        return jsonify({'notifications': notifs, 'unread_count': unread})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications/mark-read', methods=['POST'])
+def api_notifications_mark_read():
+    """Mark notifications as read"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.json
+    notif_ids = data.get('ids', [])
+
+    try:
+        db = get_db()
+        if notif_ids:
+            db.notifications.update_many(
+                {'_id': {'$in': notif_ids}, 'user': session['user']},
+                {'$set': {'is_read': True}}
+            )
+        else:
+            # Mark all as read
+            db.notifications.update_many(
+                {'user': session['user']},
+                {'$set': {'is_read': True}}
+            )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ===========================================
@@ -3730,6 +4410,368 @@ def file_viewer(source):
         return render_template_string(VIEWER_UNSUPPORTED, filename=filename, download_url=download_url)
 
 
+# ===========================================
+# Chat WebSocket Handlers (Realtime)
+# ===========================================
+
+# Track online users: sid -> username
+online_users = {}
+# Track user sids: username -> set of sids
+user_sids = {}
+
+def _init_messages_collection(db):
+    """Ensure indexes on messages collection with TTL"""
+    col = db.messages
+    col.create_index('from_user')
+    col.create_index('to_user')
+    col.create_index([('from_user', 1), ('to_user', 1)])
+    col.create_index('created_at', expireAfterSeconds=7*24*60*60)  # 7 days TTL
+    return col
+
+def _init_pending_files_collection(db):
+    """Ensure indexes on pending_files collection with TTL"""
+    col = db.pending_files
+    col.create_index('from_user')
+    col.create_index('to_user')
+    col.create_index('expires_at', expireAfterSeconds=0)  # TTL
+    return col
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    # Get username from session
+    username = session.get('user')
+    if not username or session.get('is_admin'):
+        return False  # Reject connection
+
+    sid = request.sid
+    online_users[sid] = username
+
+    if username not in user_sids:
+        user_sids[username] = set()
+    user_sids[username].add(sid)
+
+    # Join personal room for direct messages
+    join_room(username)
+
+    # Notify others that user came online (only if first connection)
+    if len(user_sids[username]) == 1:
+        emit('user_status', {'user': username, 'status': 'online'}, broadcast=True)
+
+    app.logger.info(f"Chat: {username} connected (sid={sid})")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    sid = request.sid
+    username = online_users.pop(sid, None)
+
+    if username and username in user_sids:
+        user_sids[username].discard(sid)
+        if not user_sids[username]:
+            del user_sids[username]
+            # Notify others that user went offline
+            emit('user_status', {'user': username, 'status': 'offline'}, broadcast=True)
+
+    app.logger.info(f"Chat: {username} disconnected (sid={sid})")
+
+@socketio.on('get_online_users')
+def handle_get_online_users():
+    """Get list of online users"""
+    username = session.get('user')
+    if not username:
+        return
+
+    online_list = list(user_sids.keys())
+    # Exclude self
+    if username in online_list:
+        online_list.remove(username)
+
+    emit('online_users', {'users': online_list})
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    """Send a text message to another user"""
+    from_user = session.get('user')
+    if not from_user:
+        return
+
+    to_user = data.get('to_user', '').strip()
+    content = data.get('content', '').strip()
+
+    if not to_user or not content:
+        return
+
+    if to_user == from_user:
+        return
+
+    try:
+        db = get_db()
+        _init_messages_collection(db)
+
+        msg_doc = {
+            'from_user': from_user,
+            'to_user': to_user,
+            'message_type': 'text',
+            'content': content,
+            'created_at': datetime.utcnow()
+        }
+        result = db.messages.insert_one(msg_doc)
+
+        msg_data = {
+            'id': str(result.inserted_id),
+            'from_user': from_user,
+            'to_user': to_user,
+            'message_type': 'text',
+            'content': content,
+            'created_at': datetime.utcnow().isoformat()
+        }
+
+        # Send to recipient
+        emit('new_message', msg_data, room=to_user)
+        # Echo back to sender
+        emit('message_sent', msg_data)
+
+    except Exception as e:
+        app.logger.error(f"Chat send_message error: {e}")
+
+@socketio.on('send_file')
+def handle_send_file(data):
+    """Send a file transfer request to another user"""
+    from_user = session.get('user')
+    if not from_user:
+        return
+
+    to_user = data.get('to_user', '').strip()
+    filename = data.get('filename', '')
+    s3_path = data.get('s3_path', '')
+
+    if not to_user or not filename or not s3_path:
+        return
+
+    if to_user == from_user:
+        return
+
+    try:
+        db = get_db()
+
+        # Get sender's S3 config
+        user_doc = db.users.find_one({'username': from_user})
+        s3_config = user_doc.get('s3_config') if user_doc else None
+        if not s3_config:
+            emit('error', {'message': 'S3 not configured'})
+            return
+
+        _init_pending_files_collection(db)
+
+        pending_id = str(uuid.uuid4())[:12]
+        expires_at = datetime.utcnow() + timedelta(minutes=30)
+
+        pending_doc = {
+            '_id': pending_id,
+            'from_user': from_user,
+            'to_user': to_user,
+            'filename': filename,
+            's3_path': s3_path,
+            's3_config_snapshot': s3_config,
+            'status': 'pending',
+            'expires_at': expires_at,
+            'created_at': datetime.utcnow()
+        }
+
+        db.pending_files.insert_one(pending_doc)
+
+        # Also save as message for history
+        _init_messages_collection(db)
+        db.messages.insert_one({
+            'from_user': from_user,
+            'to_user': to_user,
+            'message_type': 'file_transfer',
+            'content': f'Sent file: {filename}',
+            'file_info': {'filename': filename, 'pending_id': pending_id},
+            'created_at': datetime.utcnow()
+        })
+
+        # Notify recipient
+        emit('file_transfer_request', {
+            'pending_id': pending_id,
+            'from_user': from_user,
+            'filename': filename,
+            'expires_at': expires_at.isoformat()
+        }, room=to_user)
+
+        # Confirm to sender
+        emit('file_sent', {'pending_id': pending_id, 'filename': filename, 'to_user': to_user})
+
+    except Exception as e:
+        app.logger.error(f"Chat send_file error: {e}")
+        emit('error', {'message': str(e)})
+
+@socketio.on('accept_file')
+def handle_accept_file(data):
+    """Accept a pending file transfer"""
+    username = session.get('user')
+    if not username:
+        return
+
+    pending_id = data.get('pending_id', '')
+    dest_path = data.get('dest_path', '')  # Optional subfolder
+
+    try:
+        db = get_db()
+        pending = db.pending_files.find_one({'_id': pending_id, 'to_user': username, 'status': 'pending'})
+
+        if not pending:
+            emit('error', {'message': 'File transfer not found or expired'})
+            return
+
+        # Copy file to recipient's workspace
+        ok, result = copy_s3_to_workspace(
+            pending['s3_config_snapshot'],
+            pending['s3_path'],
+            'file',
+            username,
+            dest_path,
+            pending['filename']
+        )
+
+        if ok:
+            db.pending_files.update_one(
+                {'_id': pending_id},
+                {'$set': {'status': 'accepted', 'accepted_at': datetime.utcnow()}}
+            )
+
+            # Notify sender
+            emit('file_accepted', {
+                'pending_id': pending_id,
+                'filename': pending['filename'],
+                'by_user': username
+            }, room=pending['from_user'])
+
+            emit('file_accept_success', {'pending_id': pending_id, 'path': result})
+        else:
+            emit('error', {'message': f'Failed to transfer file: {result}'})
+
+    except Exception as e:
+        app.logger.error(f"Chat accept_file error: {e}")
+        emit('error', {'message': str(e)})
+
+@socketio.on('reject_file')
+def handle_reject_file(data):
+    """Reject a pending file transfer"""
+    username = session.get('user')
+    if not username:
+        return
+
+    pending_id = data.get('pending_id', '')
+
+    try:
+        db = get_db()
+        result = db.pending_files.update_one(
+            {'_id': pending_id, 'to_user': username, 'status': 'pending'},
+            {'$set': {'status': 'rejected', 'rejected_at': datetime.utcnow()}}
+        )
+
+        if result.modified_count:
+            pending = db.pending_files.find_one({'_id': pending_id})
+            if pending:
+                emit('file_rejected', {
+                    'pending_id': pending_id,
+                    'filename': pending['filename'],
+                    'by_user': username
+                }, room=pending['from_user'])
+
+            emit('file_reject_success', {'pending_id': pending_id})
+
+    except Exception as e:
+        app.logger.error(f"Chat reject_file error: {e}")
+
+@socketio.on('get_messages')
+def handle_get_messages(data):
+    """Get message history with a specific user"""
+    username = session.get('user')
+    if not username:
+        return
+
+    with_user = data.get('with_user', '').strip()
+    if not with_user:
+        return
+
+    try:
+        db = get_db()
+        messages = list(db.messages.find({
+            '$or': [
+                {'from_user': username, 'to_user': with_user},
+                {'from_user': with_user, 'to_user': username}
+            ]
+        }).sort('created_at', 1).limit(100))
+
+        for m in messages:
+            m['_id'] = str(m['_id'])
+            m['created_at'] = m['created_at'].isoformat() if m.get('created_at') else None
+
+        emit('message_history', {'with_user': with_user, 'messages': messages})
+
+    except Exception as e:
+        app.logger.error(f"Chat get_messages error: {e}")
+
+# Chat API endpoints
+@app.route('/api/chat/users')
+def api_chat_users():
+    """Get list of users with online status"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    current_user = session['user']
+
+    try:
+        db = get_db()
+        users = list(db.users.find(
+            {'role': {'$ne': 'admin'}, 'username': {'$ne': current_user}},
+            {'username': 1, '_id': 0}
+        ))
+
+        result = []
+        for u in users:
+            result.append({
+                'username': u['username'],
+                'online': u['username'] in user_sids
+            })
+
+        # Sort: online first
+        result.sort(key=lambda x: (not x['online'], x['username']))
+
+        return jsonify({'users': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/pending-files')
+def api_chat_pending_files():
+    """Get pending file transfers for current user"""
+    if 'user' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db = get_db()
+        pending = list(db.pending_files.find({
+            'to_user': session['user'],
+            'status': 'pending',
+            'expires_at': {'$gt': datetime.utcnow()}
+        }).sort('created_at', -1))
+
+        for p in pending:
+            p['_id'] = str(p['_id'])
+            p['created_at'] = p['created_at'].isoformat() if p.get('created_at') else None
+            p['expires_at'] = p['expires_at'].isoformat() if p.get('expires_at') else None
+            # Don't expose s3_config_snapshot
+            p.pop('s3_config_snapshot', None)
+
+        return jsonify({'pending_files': pending})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('DASHBOARD_PORT', 9998))
-    app.run(host='0.0.0.0', port=port, threaded=True)
+    # Use socketio.run for WebSocket support
+    socketio.run(app, host='0.0.0.0', port=port)

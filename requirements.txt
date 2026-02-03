@@ -136,3 +136,10 @@ py7zr
 selenium
 webdriver-manager
 playwright
+
+# ══════════════════════════════════════════════════════════════════
+# REALTIME WEBSOCKET (Chat & Notifications)
+# ══════════════════════════════════════════════════════════════════
+flask-socketio>=5.3
+python-socketio>=5.9
+eventlet>=0.33

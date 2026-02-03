@@ -588,3 +588,138 @@ def get_transfer_status(task_id):
         'current_file': task['current_file'],
         'error': task['error'],
     }
+
+
+# ==========================================
+# S3 Move/Copy operations
+# ==========================================
+
+def move_s3_items(config, items, source_path, dest_path, operation='move'):
+    """Move or copy items within S3.
+
+    Args:
+        config: S3 config dict
+        items: list of item names (files or folders)
+        source_path: relative source directory path
+        dest_path: relative destination directory path
+        operation: 'move' or 'copy'
+
+    Returns:
+        (success_count, error_list)
+    """
+    client = get_s3_client(config)
+    bucket = config['bucket_name']
+    base_prefix = config.get('prefix', '').strip('/')
+
+    success_count = 0
+    errors = []
+
+    for item_name in items:
+        try:
+            # Build source key
+            if base_prefix:
+                src_key = f"{base_prefix}/{source_path}/{item_name}" if source_path else f"{base_prefix}/{item_name}"
+            else:
+                src_key = f"{source_path}/{item_name}" if source_path else item_name
+            src_key = src_key.lstrip('/')
+
+            # Build dest key
+            if base_prefix:
+                dst_key = f"{base_prefix}/{dest_path}/{item_name}" if dest_path else f"{base_prefix}/{item_name}"
+            else:
+                dst_key = f"{dest_path}/{item_name}" if dest_path else item_name
+            dst_key = dst_key.lstrip('/')
+
+            # Skip if source == dest
+            if src_key == dst_key:
+                continue
+
+            # Check if it's a "directory" (has objects under prefix/)
+            prefix_check = src_key.rstrip('/') + '/'
+            resp = client.list_objects_v2(Bucket=bucket, Prefix=prefix_check, MaxKeys=1)
+            is_dir = resp.get('KeyCount', 0) > 0
+
+            if is_dir:
+                # Copy all objects under the prefix
+                paginator = client.get_paginator('list_objects_v2')
+                for page in paginator.paginate(Bucket=bucket, Prefix=prefix_check):
+                    for obj in page.get('Contents', []):
+                        rel = obj['Key'][len(prefix_check):]
+                        new_key = dst_key.rstrip('/') + '/' + rel
+                        # Copy
+                        client.copy_object(
+                            Bucket=bucket,
+                            CopySource={'Bucket': bucket, 'Key': obj['Key']},
+                            Key=new_key
+                        )
+                        # Delete original if move
+                        if operation == 'move':
+                            client.delete_object(Bucket=bucket, Key=obj['Key'])
+            else:
+                # Single file
+                try:
+                    client.copy_object(
+                        Bucket=bucket,
+                        CopySource={'Bucket': bucket, 'Key': src_key},
+                        Key=dst_key
+                    )
+                    if operation == 'move':
+                        client.delete_object(Bucket=bucket, Key=src_key)
+                except ClientError:
+                    # Maybe it's a folder marker
+                    pass
+
+            success_count += 1
+        except Exception as e:
+            errors.append(f"{item_name}: {e}")
+
+    return success_count, errors
+
+
+def copy_s3_to_workspace(config_snapshot, s3_key, item_type, username, dest_path='', item_name=None):
+    """Copy file/folder from sender's S3 to recipient's workspace.
+
+    Args:
+        config_snapshot: S3 config dict (from share)
+        s3_key: full S3 key of the item
+        item_type: 'file' or 'dir'
+        username: recipient username
+        dest_path: relative destination path in workspace
+        item_name: name to save as (optional, defaults to basename of s3_key)
+
+    Returns:
+        (success, message)
+    """
+    import shutil
+
+    client = get_s3_client(config_snapshot)
+    bucket = config_snapshot['bucket_name']
+
+    if not item_name:
+        item_name = s3_key.rsplit('/', 1)[-1] if '/' in s3_key else s3_key
+
+    local_base = _safe_workspace_path(username, os.path.join(dest_path, item_name) if dest_path else item_name)
+    if not local_base:
+        return False, "Invalid destination path"
+
+    try:
+        if item_type == 'file':
+            # Single file download
+            os.makedirs(os.path.dirname(local_base), exist_ok=True)
+            client.download_file(bucket, s3_key, local_base)
+        else:
+            # Directory download
+            prefix = s3_key.rstrip('/') + '/'
+            paginator = client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    rel = obj['Key'][len(prefix):]
+                    if not rel:
+                        continue
+                    local_fp = os.path.join(local_base, rel.replace('/', os.sep))
+                    os.makedirs(os.path.dirname(local_fp), exist_ok=True)
+                    client.download_file(bucket, obj['Key'], local_fp)
+
+        return True, f"Copied to workspace: {item_name}"
+    except Exception as e:
+        return False, str(e)
