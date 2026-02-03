@@ -5573,7 +5573,10 @@ def handle_get_messages(data):
 
         for m in messages:
             m['_id'] = str(m['_id'])
-            m['created_at'] = m['created_at'].isoformat() if m.get('created_at') else None
+            # Convert all datetime fields to ISO format
+            for key in ['created_at', 'recalled_at', 'accepted_at', 'rejected_at']:
+                if m.get(key) and hasattr(m[key], 'isoformat'):
+                    m[key] = m[key].isoformat()
 
         emit('message_history', {'with_user': with_user, 'messages': messages})
 
