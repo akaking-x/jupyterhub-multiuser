@@ -56,9 +56,13 @@ def has_s3_config(db, username):
 
 def get_s3_client(config):
     """Create boto3 S3 client from config dict"""
+    from botocore.config import Config as BotoConfig
     kwargs = {
         'aws_access_key_id': config['access_key'],
         'aws_secret_access_key': config['secret_key'],
+        # Disable aws-chunked transfer encoding for S3-compatible services
+        # that don't support it (boto3 >= 1.36 sends chunked + CRC32 trailers by default)
+        'config': BotoConfig(request_checksum_calculation='when_required'),
     }
     if config.get('endpoint_url'):
         kwargs['endpoint_url'] = config['endpoint_url']
