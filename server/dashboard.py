@@ -375,10 +375,16 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a 0%
 .window-controls button:active{transform:scale(0.95)}
 .window-body{flex:1;overflow:auto;background:#0f172a;position:relative}
 .window-body iframe{width:100%;height:100%;border:none}
-.jupyter-dropzone{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(99,102,241,.85);display:flex;align-items:center;justify-content:center;z-index:100;pointer-events:auto}
-.jupyter-dropzone .dropzone-content{text-align:center;color:#fff;padding:40px}
-.jupyter-dropzone .dropzone-icon{font-size:64px;margin-bottom:16px}
-.jupyter-dropzone.drag-over{background:rgba(16,185,129,.9)}
+.jupyter-dropzone{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.95);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer}
+.jupyter-dropzone .dropzone-content{text-align:center;color:#fff;padding:60px 80px;background:rgba(99,102,241,.2);border:3px dashed #6366f1;border-radius:20px;max-width:500px;transition:all .2s}
+.jupyter-dropzone .dropzone-content:hover{background:rgba(99,102,241,.4);transform:scale(1.02)}
+.jupyter-dropzone .dropzone-icon{font-size:80px;margin-bottom:20px}
+.jupyter-dropzone .dropzone-text{font-size:18px;margin-bottom:12px;font-weight:500}
+.jupyter-dropzone .dropzone-hint{font-size:14px;color:#94a3b8;margin-bottom:8px}
+.jupyter-dropzone .dropzone-hint strong{color:#fff}
+.jupyter-dropzone.drag-over .dropzone-content{background:rgba(16,185,129,.3);border-color:#10b981}
+.jupyter-dropzone .cancel-btn{margin-top:24px;background:#475569;border:none;color:#fff;padding:12px 32px;border-radius:8px;cursor:pointer;font-size:14px}
+.jupyter-dropzone .cancel-btn:hover{background:#64748b}
 .resize-handle{position:absolute;background:transparent;z-index:10}
 .resize-n{top:0;left:10px;right:10px;height:6px;cursor:n-resize}
 .resize-s{bottom:0;left:10px;right:10px;height:6px;cursor:s-resize}
@@ -496,35 +502,31 @@ window.addEventListener('message',function(e){
     if(e.data&&e.data.type==='file-drag-start'){
         draggedFile=e.data;
         showJupyterDropZone(true);
-    }else if(e.data&&e.data.type==='file-drag-end'){
-        draggedFile=null;
-        showJupyterDropZone(false);
+        // Update filename display
+        var fn=document.getElementById('dz-filename');
+        if(fn)fn.textContent=draggedFile.filename||'';
     }
+    // Note: Don't hide on file-drag-end - user must click to confirm or cancel
 });
 function showJupyterDropZone(show){
-    var jw=wins['jupyterlab'];
-    if(!jw){
-        // Open JupyterLab if not open, then show dropzone
-        if(show){
-            openWindow('jupyterlab');
-            setTimeout(function(){showJupyterDropZone(true);},100);
-        }
-        return;
-    }
-    var dz=jw.el.querySelector('.jupyter-dropzone');
-    var iframe=jw.el.querySelector('iframe');
+    var dz=document.getElementById('global-dropzone');
     if(show&&!dz){
-        // Ensure JupyterLab window is visible and on top
-        if(jw.el.classList.contains('minimized'))jw.el.classList.remove('minimized');
-        jw.el.classList.add('show');
-        focusWin('jupyterlab');
-        // Disable iframe pointer events so dropzone can receive drag
-        if(iframe)iframe.style.pointerEvents='none';
+        // Open JupyterLab if not open
+        if(!wins['jupyterlab']){
+            openWindow('jupyterlab');
+        }
+        // Create full-screen dropzone
         dz=document.createElement('div');
+        dz.id='global-dropzone';
         dz.className='jupyter-dropzone';
-        dz.innerHTML='<div class="dropzone-content"><div class="dropzone-icon">&#128229;</div><div>Drop file here to import to JupyterLab</div></div>';
-        dz.ondragover=function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='copy';};
-        dz.ondragleave=function(){dz.classList.remove('drag-over');};
+        dz.innerHTML='<div class="dropzone-content">'+
+            '<div class="dropzone-icon">&#128229;</div>'+
+            '<div class="dropzone-text">Nhấn vào đây để chuyển file vào JupyterLab</div>'+
+            '<div class="dropzone-hint">File: <strong id="dz-filename"></strong></div>'+
+            '<button class="cancel-btn" onclick="event.stopPropagation();cancelDrop()">Hủy</button>'+
+            '</div>';
+        dz.ondragover=function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='copy';dz.classList.add('drag-over');};
+        dz.ondragleave=function(ev){if(ev.target===dz)dz.classList.remove('drag-over');};
         dz.ondragenter=function(){dz.classList.add('drag-over');};
         dz.ondrop=function(ev){
             ev.preventDefault();
@@ -534,12 +536,28 @@ function showJupyterDropZone(show){
             draggedFile=null;
             showJupyterDropZone(false);
         };
-        jw.el.querySelector('.window-body').appendChild(dz);
+        // Click anywhere to transfer (for when drag doesn't work across iframes)
+        dz.onclick=function(ev){
+            if(ev.target===dz||ev.target.classList.contains('dropzone-content')){
+                if(draggedFile){
+                    transferToJupyter(draggedFile);
+                }
+                draggedFile=null;
+                showJupyterDropZone(false);
+            }
+        };
+        document.body.appendChild(dz);
+        // Show filename
+        if(draggedFile&&draggedFile.filename){
+            document.getElementById('dz-filename').textContent=draggedFile.filename;
+        }
     }else if(!show&&dz){
         dz.remove();
-        // Re-enable iframe pointer events
-        if(iframe)iframe.style.pointerEvents='';
     }
+}
+function cancelDrop(){
+    draggedFile=null;
+    showJupyterDropZone(false);
 }
 function transferToJupyter(fileData){
     // Workspace files are already in JupyterLab - just refresh
