@@ -2761,20 +2761,32 @@ function renderMessages(){
 
         if(m.message_type==='file'){
             var fi=m.file_info||{};
-            var status=fi.status||'accepted';
+            var status=fi.status||'pending';
             html+='<div class="message file '+(sent?'sent':'received')+'" data-id="'+msgId+'">';
             html+='<div class="file-box"><span class="file-icon">&#128196;</span><div><div class="file-name">'+escapeHtml(fi.filename||'file')+'</div><div class="file-size">'+(fi.size?formatSize(fi.size):'')+'</div></div></div>';
 
-            if(!sent && status==='pending'){
+            if(sent){
+                // Sender can always download their own file
+                html+='<div class="file-actions">';
+                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
+                if(status==='pending'){
+                    html+='<span style="font-size:11px;color:#f59e0b;margin-left:8px">Chờ duyệt</span>';
+                }else if(status==='rejected'){
+                    html+='<span style="font-size:11px;color:#ef4444;margin-left:8px">Bị từ chối</span>';
+                }else if(status==='accepted'){
+                    html+='<span style="font-size:11px;color:#10b981;margin-left:8px">Đã chấp nhận</span>';
+                }
+                html+='</div>';
+            }else if(status==='pending'){
                 // Receiver needs to approve
                 html+='<div class="file-actions" style="border-top:1px solid #334155;padding-top:8px;margin-top:8px">';
                 html+='<button class="btn btn-sm btn-success" onclick="acceptFile(\\''+fi.file_id+'\\')">Chấp nhận</button>';
                 html+='<button class="btn btn-sm btn-danger" onclick="rejectFile(\\''+fi.file_id+'\\')">Từ chối</button>';
                 html+='</div>';
-            }else if(status==='accepted' && fi.download_url){
+            }else if(status==='accepted'){
                 // Accepted - show download options
                 html+='<div class="file-actions">';
-                html+='<a href="'+fi.download_url+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
+                html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download>Tải xuống</a>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToS3(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ S3</button>';
                 html+='</div>';
@@ -2805,7 +2817,7 @@ function sendMsg(){
 
     // Must be friends to send messages
     if(friends[selectedUser]!=='accepted'){
-        alert('Bạn phải kết bạn trước khi nhắn tin!');
+        showModal('Thông báo','Bạn phải kết bạn trước khi nhắn tin!','warning');
         return;
     }
 
@@ -2853,7 +2865,7 @@ function confirmSendFile(){
 
     // Must be friends to send files
     if(friends[selectedUser]!=='accepted'){
-        alert('Bạn phải kết bạn trước khi gửi file!');
+        showModal('Thông báo','Bạn phải kết bạn trước khi gửi file!','warning');
         return;
     }
 
@@ -2885,7 +2897,13 @@ function confirmSendFile(){
                     from_user:currentUser,
                     to_user:selectedUser,
                     message_type:'file',
-                    file_info:{filename:resp.filename,size:resp.size,download_url:resp.download_url},
+                    file_info:{
+                        file_id:resp.file_id,
+                        filename:resp.filename,
+                        size:resp.size,
+                        status:resp.status,
+                        download_url:resp.download_url
+                    },
                     created_at:new Date().toISOString()
                 });
                 // Update contact
@@ -2897,11 +2915,11 @@ function confirmSendFile(){
                 scrollToBottom();
                 hideFileModal();
             }else{
-                alert('Lỗi: '+(resp.error||'Upload thất bại'));
+                showModal('Lỗi',resp.error||'Upload thất bại','error');
                 document.getElementById('send-file-btn').disabled=false;
             }
         }else{
-            alert('Lỗi upload file');
+            showModal('Lỗi','Lỗi upload file','error');
             document.getElementById('send-file-btn').disabled=false;
         }
     };
@@ -3021,24 +3039,29 @@ function acceptFile(fileId){
                 }
             });
             renderMessages();
+            showModal('Thành công','File đã được chấp nhận','success');
         }else{
-            alert(data.error||'Lỗi');
+            showModal('Lỗi',data.error||'Không thể chấp nhận file','error');
         }
     });
 }
 
 function rejectFile(fileId){
-    fetch('/api/chat/file/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId})})
-    .then(r=>r.json()).then(data=>{
-        if(data.success){
-            var msgs=messages[selectedUser]||[];
-            msgs.forEach(m=>{
-                if(m.message_type==='file'&&m.file_info&&m.file_info.file_id===fileId){
-                    m.file_info.status='rejected';
-                }
-            });
-            renderMessages();
-        }
+    showConfirm('Từ chối file','Bạn chắc chắn muốn từ chối file này?',function(){
+        fetch('/api/chat/file/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId})})
+        .then(r=>r.json()).then(data=>{
+            if(data.success){
+                var msgs=messages[selectedUser]||[];
+                msgs.forEach(m=>{
+                    if(m.message_type==='file'&&m.file_info&&m.file_info.file_id===fileId){
+                        m.file_info.status='rejected';
+                    }
+                });
+                renderMessages();
+            }else{
+                showModal('Lỗi',data.error||'Không thể từ chối','error');
+            }
+        });
     });
 }
 
@@ -3046,9 +3069,9 @@ function saveToWorkspace(fileId,filename){
     fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'workspace'})})
     .then(r=>r.json()).then(data=>{
         if(data.success){
-            alert('Đã lưu vào Workspace: '+filename);
+            showModal('Thành công','Đã lưu vào Workspace: '+filename,'success');
         }else{
-            alert(data.error||'Lỗi');
+            showModal('Lỗi',data.error||'Không thể lưu file','error');
         }
     });
 }
@@ -3057,27 +3080,28 @@ function saveToS3(fileId,filename){
     fetch('/api/chat/file/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,dest:'s3'})})
     .then(r=>r.json()).then(data=>{
         if(data.success){
-            alert('Đã lưu vào S3 Backup: '+filename);
+            showModal('Thành công','Đã lưu vào S3 Backup: '+filename,'success');
         }else{
-            alert(data.error||'Lỗi');
+            showModal('Lỗi',data.error||'Không thể lưu file','error');
         }
     });
 }
 
 // ===== MESSAGE RECALL =====
 function recallMessage(msgId,idx){
-    if(!confirm('Thu hồi tin nhắn này?'))return;
-    fetch('/api/chat/message/recall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:msgId,with_user:selectedUser})})
-    .then(r=>r.json()).then(data=>{
-        if(data.success){
-            var msgs=messages[selectedUser]||[];
-            if(msgs[idx])msgs[idx].recalled=true;
-            renderMessages();
-            // Notify via socket
-            socket.emit('message_recalled',{message_id:msgId,to_user:selectedUser});
-        }else{
-            alert(data.error||'Lỗi');
-        }
+    showConfirm('Thu hồi tin nhắn','Bạn muốn thu hồi tin nhắn này?',function(){
+        fetch('/api/chat/message/recall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:msgId,with_user:selectedUser})})
+        .then(r=>r.json()).then(data=>{
+            if(data.success){
+                var msgs=messages[selectedUser]||[];
+                if(msgs[idx])msgs[idx].recalled=true;
+                renderMessages();
+                // Notify via socket
+                socket.emit('message_recalled',{message_id:msgId,to_user:selectedUser});
+            }else{
+                showModal('Lỗi',data.error||'Không thể thu hồi','error');
+            }
+        });
     });
 }
 
@@ -6025,7 +6049,8 @@ def api_chat_upload():
             'file_id': file_id,
             'filename': file.filename,
             'size': file_size,
-            'status': 'pending'
+            'status': 'pending',
+            'download_url': download_url  # Sender can always download their own file
         })
 
     except Exception as e:
