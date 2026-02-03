@@ -20,7 +20,7 @@ from pymongo import MongoClient
 
 from extension_manager import (
     list_extensions, install_extension, uninstall_extension, restart_all_jupyterlab,
-    get_popular_extensions, search_pypi,
+    get_popular_extensions, search_catalog, get_installed_packages,
 )
 from s3_manager import (
     get_s3_config, has_s3_config, test_s3_connection,
@@ -427,17 +427,23 @@ ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager<
 .ext-card .ext-pkg{font-size:12px;color:#818cf8;font-family:monospace;margin-bottom:8px}
 .ext-card p{font-size:13px;color:#94a3b8;margin-bottom:12px;line-height:1.4}
 .ext-card .ext-actions{display:flex;gap:8px;align-items:center}
-.search-box{display:flex;gap:10px;margin-bottom:0}
+.search-box{display:flex;gap:10px}
 .search-box input{flex:1}
-.tab-bar{display:flex;gap:0;border-bottom:2px solid #334155;margin-bottom:0}
+.tab-bar{display:flex;gap:0;border-bottom:2px solid #334155}
 .tab-bar button{background:none;border:none;padding:12px 20px;color:#94a3b8;font-size:14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500}
 .tab-bar button.active{color:#818cf8;border-bottom-color:#818cf8}
 .tab-bar button:hover{color:#e2e8f0}
 .tab-content{display:none}
 .tab-content.active{display:block}
-#search-results .ext-grid{min-height:100px}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid #334155;border-top-color:#818cf8;border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.pagination{display:flex;gap:10px;justify-content:center;align-items:center;padding:16px}
+.pagination .btn{min-width:100px}
+.pagination .page-info{color:#94a3b8;font-size:13px}
+.section-label{padding:16px 20px 0;font-size:12px;text-transform:uppercase;color:#64748b;font-weight:600;letter-spacing:1px}
+.cat-filter{background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:20px;padding:4px 12px;font-size:12px;cursor:pointer;transition:all .2s}
+.cat-filter:hover{border-color:#6366f1;color:#e2e8f0}
+.cat-filter.active{background:#6366f1;border-color:#6366f1;color:#fff}
 </style>
 </head><body>
 <nav class="navbar"><h1>&#128218; Jupyter<span>Hub</span> Admin</h1>
@@ -452,12 +458,10 @@ ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager<
 <div class="container" style="max-width:1200px">
     {% if message %}<div class="alert {{ 'alert-success' if success else 'alert-error' }}">{{ message }}</div>{% endif %}
 
-    <!-- Tabs -->
     <div class="card">
         <div class="tab-bar">
             <button class="active" onclick="showTab('installed')">&#128230; Installed ({{ extensions|length }})</button>
-            <button onclick="showTab('browse')">&#11088; Popular</button>
-            <button onclick="showTab('search')">&#128269; Search PyPI</button>
+            <button onclick="showTab('browse')">&#128269; Browse PyPI</button>
         </div>
 
         <!-- Tab: Installed -->
@@ -489,89 +493,160 @@ ADMIN_EXTENSIONS = CSS + """<!DOCTYPE html><html><head><title>Extension Manager<
             </div>
         </div>
 
-        <!-- Tab: Browse Popular -->
+        <!-- Tab: Browse PyPI -->
         <div class="tab-content" id="tab-browse">
-            <div class="ext-grid" id="popular-grid">
-                {% for ext in popular %}
-                <div class="ext-card">
-                    <h4>{{ ext.name }}</h4>
-                    <div class="ext-pkg">{{ ext.package }}</div>
-                    <p>{{ ext.desc }}</p>
-                    <div class="ext-actions">
-                        {% if ext.installed %}
-                        <span class="tag tag-green">Installed</span>
-                        <form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm('Uninstall {{ ext.package }}?')">
-                            <input type="hidden" name="package" value="{{ ext.package }}">
-                            <button class="btn btn-danger btn-sm">Uninstall</button>
-                        </form>
-                        {% else %}
-                        <form method="post" action="/admin/extensions/install" style="display:inline">
-                            <input type="hidden" name="package" value="{{ ext.package }}">
-                            <button class="btn btn-success btn-sm">Install</button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Tab: Search PyPI -->
-        <div class="tab-content" id="tab-search">
+            <!-- Search box -->
             <div style="padding:16px 20px">
                 <div class="search-box">
-                    <input type="text" id="search-input" class="form-control" placeholder="Search JupyterLab extensions on PyPI..." onkeydown="if(event.key==='Enter')doSearch()">
+                    <input type="text" id="search-input" class="form-control" placeholder="Search extensions (e.g. git, theme, vim, spreadsheet...)" onkeydown="if(event.key==='Enter'){doSearch();return false;}">
                     <button class="btn btn-primary" onclick="doSearch()">Search</button>
                 </div>
             </div>
-            <div id="search-results"></div>
+
+            <!-- Recommended section (curated) -->
+            <div id="recommended-section">
+                <div style="padding:16px 20px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span style="color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-right:4px">Filter:</span>
+                    <button class="cat-filter active" data-cat="all" onclick="filterCat('all')">All</button>
+                    <button class="cat-filter" data-cat="dev" onclick="filterCat('dev')">Developer</button>
+                    <button class="cat-filter" data-cat="ui" onclick="filterCat('ui')">UI &amp; Themes</button>
+                    <button class="cat-filter" data-cat="data" onclick="filterCat('data')">Data &amp; Viz</button>
+                    <button class="cat-filter" data-cat="ai" onclick="filterCat('ai')">AI &amp; Productivity</button>
+                    <button class="cat-filter" data-cat="lang" onclick="filterCat('lang')">Languages</button>
+                    <button class="cat-filter" data-cat="kernel" onclick="filterCat('kernel')">Kernels</button>
+                    <button class="cat-filter" data-cat="file" onclick="filterCat('file')">File Mgmt</button>
+                </div>
+                <div class="ext-grid" id="rec-grid">
+                    {% for ext in popular %}
+                    <div class="ext-card rec-card" data-cat="{{ ext.cat }}">
+                        <h4>{{ ext.name }}</h4>
+                        <div class="ext-pkg">{{ ext.package }}</div>
+                        <p>{{ ext.desc }}</p>
+                        <div class="ext-actions">
+                            {% if ext.installed %}
+                            <span class="tag tag-green">Installed</span>
+                            <form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm('Uninstall {{ ext.package }}?')">
+                                <input type="hidden" name="package" value="{{ ext.package }}">
+                                <button class="btn btn-danger btn-sm">Uninstall</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="/admin/extensions/install" style="display:inline">
+                                <input type="hidden" name="package" value="{{ ext.package }}">
+                                <button class="btn btn-success btn-sm">Install</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="pagination" id="rec-pagination"></div>
+            </div>
+
+            <!-- Search results (replaces recommended when searching) -->
+            <div id="search-results" style="display:none"></div>
         </div>
     </div>
 </div>
 
 <script>
+var recPage = 1;
+var recPerPage = 12;
+var currentCat = 'all';
+
 function showTab(name) {
     document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
     document.querySelectorAll('.tab-bar button').forEach(function(el){ el.classList.remove('active'); });
     document.getElementById('tab-'+name).classList.add('active');
-    // Highlight correct tab button
     var btns = document.querySelectorAll('.tab-bar button');
-    var map = {'installed':0,'browse':1,'search':2};
+    var map = {'installed':0,'browse':1};
     if (map[name] !== undefined) btns[map[name]].classList.add('active');
+    if (name === 'browse') paginateRec();
+}
+
+function filterCat(cat) {
+    currentCat = cat;
+    recPage = 1;
+    document.querySelectorAll('.cat-filter').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelector('.cat-filter[data-cat="'+cat+'"]').classList.add('active');
+    paginateRec();
+}
+
+function paginateRec() {
+    var cards = document.querySelectorAll('.rec-card');
+    var visible = [];
+    cards.forEach(function(c){
+        if (currentCat === 'all' || c.dataset.cat === currentCat) {
+            visible.push(c);
+        }
+        c.style.display = 'none';
+    });
+    var start = (recPage - 1) * recPerPage;
+    var end = Math.min(start + recPerPage, visible.length);
+    for (var i = start; i < end; i++) {
+        visible[i].style.display = '';
+    }
+    var totalPages = Math.ceil(visible.length / recPerPage);
+    var pag = document.getElementById('rec-pagination');
+    if (totalPages <= 1) {
+        pag.innerHTML = '<span class="page-info">' + visible.length + ' extensions</span>';
+    } else {
+        var html = '';
+        if (recPage > 1) html += '<button class="btn btn-secondary btn-sm" onclick="recPage--;paginateRec()">&#9664; Prev</button>';
+        html += '<span class="page-info">Page ' + recPage + ' / ' + totalPages + ' (' + visible.length + ' extensions)</span>';
+        if (recPage < totalPages) html += '<button class="btn btn-secondary btn-sm" onclick="recPage++;paginateRec()">Next &#9654;</button>';
+        pag.innerHTML = html;
+    }
+}
+
+paginateRec();
+
+function renderCards(items) {
+    var html = '<div class="ext-grid">';
+    items.forEach(function(ext){
+        var pkg = ext.package.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+        var name = (ext.name||pkg).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        var desc = (ext.desc||'No description').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        html += '<div class="ext-card"><h4>'+name+'</h4>' +
+            '<div class="ext-pkg">'+pkg+'</div>' +
+            '<p>'+desc+'</p><div class="ext-actions">';
+        if (ext.installed) {
+            html += '<span class="tag tag-green">Installed</span>' +
+                '<form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm(&quot;Uninstall '+pkg+'?&quot;)"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-danger btn-sm">Uninstall</button></form>';
+        } else {
+            html += '<form method="post" action="/admin/extensions/install" style="display:inline"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-success btn-sm">Install</button></form>';
+        }
+        html += '</div></div>';
+    });
+    html += '</div>';
+    return html;
 }
 
 function doSearch() {
     var q = document.getElementById('search-input').value.trim();
-    if (!q) return;
+    if (!q) {
+        document.getElementById('recommended-section').style.display = '';
+        document.getElementById('search-results').style.display = 'none';
+        paginateRec();
+        return;
+    }
     var el = document.getElementById('search-results');
-    el.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner"></div> Searching PyPI...</div>';
+    var rec = document.getElementById('recommended-section');
+    rec.style.display = 'none';
+    el.style.display = '';
+    el.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div><span style="margin-left:10px;color:#94a3b8">Searching...</span></div>';
+
     fetch('/admin/extensions/search?q='+encodeURIComponent(q))
     .then(function(r){ return r.json(); })
     .then(function(data){
-        if (!data.length) {
-            el.innerHTML = '<div class="empty">No results found</div>';
+        if (!data.results || !data.results.length) {
+            el.innerHTML = '<div class="empty">No results for &quot;'+q+'&quot;. Try a different keyword or install manually from the Installed tab.</div>';
             return;
         }
-        var html = '<div class="ext-grid">';
-        data.forEach(function(ext){
-            var pkg = ext.package.replace(/'/g, '&#39;');
-            html += '<div class="ext-card">' +
-                '<h4>'+pkg+'</h4>' +
-                '<div class="ext-pkg">v'+ext.version+'</div>' +
-                '<p>'+(ext.desc||'No description')+'</p>' +
-                '<div class="ext-actions">';
-            if (ext.installed) {
-                html += '<span class="tag tag-green">Installed</span>' +
-                    '<form method="post" action="/admin/extensions/uninstall" style="display:inline" onsubmit="return confirm(&quot;Uninstall '+pkg+'?&quot;)"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-danger btn-sm">Uninstall</button></form>';
-            } else {
-                html += '<form method="post" action="/admin/extensions/install" style="display:inline"><input type="hidden" name="package" value="'+pkg+'"><button class="btn btn-success btn-sm">Install</button></form>';
-            }
-            html += '</div></div>';
-        });
-        html += '</div>';
+        var html = '<div class="section-label">Results for &quot;'+q+'&quot; ('+data.results.length+' found)</div>';
+        html += renderCards(data.results);
         el.innerHTML = html;
     })
-    .catch(function(){ el.innerHTML = '<div class="empty">Search failed</div>'; });
+    .catch(function(){ el.innerHTML = '<div class="empty">Search failed. Check server connection.</div>'; });
 }
 </script>
 </body></html>"""
@@ -948,10 +1023,12 @@ def admin_extensions():
 
 @app.route('/admin/extensions/search')
 def admin_ext_search():
-    if not session.get('is_admin'): return jsonify([])
+    if not session.get('is_admin'): return jsonify({'results': []})
     q = request.args.get('q', '')
-    results = search_pypi(q)
-    return jsonify(results)
+    results = search_catalog(q)
+    installed = get_installed_packages()
+    enriched = [{**ext, 'installed': ext['package'].lower() in installed} for ext in results]
+    return jsonify({'results': enriched})
 
 @app.route('/admin/extensions/install', methods=['POST'])
 def admin_ext_install():
