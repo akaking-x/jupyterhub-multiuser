@@ -2346,109 +2346,73 @@ loadWs('');
 
 # ===========================================
 # ===========================================
-# EMBED_BROWSER - Simple web browser
+# EMBED_BROWSER - Web Portal (opens in new tab)
 # ===========================================
 
-EMBED_BROWSER = EMBED_CSS + """<!DOCTYPE html><html><head><title>Browser</title>
+EMBED_BROWSER = EMBED_CSS + """<!DOCTYPE html><html><head><title>Web Portal</title>
 <style>
-.browser-container{display:flex;flex-direction:column;height:100vh;overflow:hidden}
-.browser-toolbar{display:flex;gap:8px;padding:8px 12px;background:#1e293b;border-bottom:1px solid #334155;align-items:center}
-.browser-toolbar .nav-btn{background:#334155;border:none;color:#e2e8f0;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
-.browser-toolbar .nav-btn:hover{background:#475569}
-.browser-toolbar .nav-btn:disabled{opacity:0.5;cursor:not-allowed}
-.browser-toolbar .url-bar{flex:1;display:flex;gap:8px}
-.browser-toolbar .url-input{flex:1;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:13px}
-.browser-toolbar .url-input:focus{outline:none;border-color:#6366f1}
-.browser-toolbar .go-btn{background:#6366f1;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500}
-.browser-toolbar .go-btn:hover{background:#4f46e5}
-.browser-frame{flex:1;border:none;background:#fff}
-.bookmarks{display:flex;gap:6px;padding:6px 12px;background:#0f172a;border-bottom:1px solid #334155;flex-wrap:wrap}
-.bookmark{background:#334155;border:none;color:#e2e8f0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px}
-.bookmark:hover{background:#475569}
+.portal-container{padding:20px;height:100vh;overflow-y:auto;box-sizing:border-box}
+.search-section{max-width:600px;margin:0 auto 30px;text-align:center}
+.search-section h2{margin-bottom:16px;font-size:24px;color:#e2e8f0}
+.search-box{display:flex;gap:8px}
+.search-box input{flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;color:#e2e8f0;font-size:14px}
+.search-box input:focus{outline:none;border-color:#6366f1}
+.search-box button{background:#6366f1;border:none;color:#fff;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500}
+.search-box button:hover{background:#4f46e5}
+.bookmarks-section{max-width:900px;margin:0 auto}
+.bookmarks-section h3{margin-bottom:16px;font-size:16px;color:#94a3b8;border-bottom:1px solid #334155;padding-bottom:8px}
+.bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:30px}
+.bookmark-card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s}
+.bookmark-card:hover{background:#334155;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.bookmark-card .icon{font-size:32px;margin-bottom:8px}
+.bookmark-card .name{font-size:13px;color:#e2e8f0;font-weight:500}
+.tip{text-align:center;color:#64748b;font-size:12px;margin-top:20px}
 </style>
 </head><body>
-<div class="browser-container">
-    <div class="browser-toolbar">
-        <button class="nav-btn" onclick="goBack()" title="Back">&#8592;</button>
-        <button class="nav-btn" onclick="goForward()" title="Forward">&#8594;</button>
-        <button class="nav-btn" onclick="refresh()" title="Refresh">&#8635;</button>
-        <button class="nav-btn" onclick="goHome()" title="Home">&#127968;</button>
-        <div class="url-bar">
-            <input type="text" class="url-input" id="url-input" placeholder="Enter URL or search..." onkeydown="if(event.key==='Enter')navigate()">
-            <button class="go-btn" onclick="navigate()">Go</button>
+<div class="portal-container">
+    <div class="search-section">
+        <h2>&#127760; Web Portal</h2>
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Search Google or enter URL..." onkeydown="if(event.key==='Enter')search()">
+            <button onclick="search()">Search</button>
         </div>
     </div>
-    <div class="bookmarks">
-        <button class="bookmark" onclick="go('https://www.google.com')">Google</button>
-        <button class="bookmark" onclick="go('https://chat.openai.com')">ChatGPT</button>
-        <button class="bookmark" onclick="go('https://claude.ai')">Claude</button>
-        <button class="bookmark" onclick="go('https://github.com')">GitHub</button>
-        <button class="bookmark" onclick="go('https://stackoverflow.com')">StackOverflow</button>
-        <button class="bookmark" onclick="go('https://www.youtube.com')">YouTube</button>
-        <button class="bookmark" onclick="go('https://docs.python.org')">Python Docs</button>
+    <div class="bookmarks-section">
+        <h3>&#11088; Quick Links</h3>
+        <div class="bookmarks-grid">
+            <div class="bookmark-card" onclick="go('https://www.google.com')"><div class="icon">&#128269;</div><div class="name">Google</div></div>
+            <div class="bookmark-card" onclick="go('https://chat.openai.com')"><div class="icon">&#129302;</div><div class="name">ChatGPT</div></div>
+            <div class="bookmark-card" onclick="go('https://claude.ai')"><div class="icon">&#128172;</div><div class="name">Claude AI</div></div>
+            <div class="bookmark-card" onclick="go('https://gemini.google.com')"><div class="icon">&#10024;</div><div class="name">Gemini</div></div>
+            <div class="bookmark-card" onclick="go('https://github.com')"><div class="icon">&#128025;</div><div class="name">GitHub</div></div>
+            <div class="bookmark-card" onclick="go('https://stackoverflow.com')"><div class="icon">&#128218;</div><div class="name">StackOverflow</div></div>
+            <div class="bookmark-card" onclick="go('https://www.youtube.com')"><div class="icon">&#9658;</div><div class="name">YouTube</div></div>
+            <div class="bookmark-card" onclick="go('https://translate.google.com')"><div class="icon">&#127760;</div><div class="name">Translate</div></div>
+        </div>
+        <h3>&#128187; Development</h3>
+        <div class="bookmarks-grid">
+            <div class="bookmark-card" onclick="go('https://docs.python.org/3/')"><div class="icon">&#128013;</div><div class="name">Python Docs</div></div>
+            <div class="bookmark-card" onclick="go('https://developer.mozilla.org')"><div class="icon">&#128640;</div><div class="name">MDN Docs</div></div>
+            <div class="bookmark-card" onclick="go('https://codepen.io')"><div class="icon">&#9997;</div><div class="name">CodePen</div></div>
+            <div class="bookmark-card" onclick="go('https://replit.com')"><div class="icon">&#9654;</div><div class="name">Replit</div></div>
+            <div class="bookmark-card" onclick="go('https://colab.research.google.com')"><div class="icon">&#128211;</div><div class="name">Colab</div></div>
+            <div class="bookmark-card" onclick="go('https://kaggle.com')"><div class="icon">&#128202;</div><div class="name">Kaggle</div></div>
+        </div>
+        <h3>&#128736; Tools</h3>
+        <div class="bookmarks-grid">
+            <div class="bookmark-card" onclick="go('https://docs.google.com')"><div class="icon">&#128196;</div><div class="name">Google Docs</div></div>
+            <div class="bookmark-card" onclick="go('https://sheets.google.com')"><div class="icon">&#128202;</div><div class="name">Sheets</div></div>
+            <div class="bookmark-card" onclick="go('https://drive.google.com')"><div class="icon">&#128193;</div><div class="name">Drive</div></div>
+            <div class="bookmark-card" onclick="go('https://notion.so')"><div class="icon">&#128221;</div><div class="name">Notion</div></div>
+            <div class="bookmark-card" onclick="go('https://figma.com')"><div class="icon">&#127912;</div><div class="name">Figma</div></div>
+            <div class="bookmark-card" onclick="go('https://canva.com')"><div class="icon">&#127912;</div><div class="name">Canva</div></div>
+        </div>
     </div>
-    <iframe id="browser-frame" class="browser-frame" src="https://www.google.com" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"></iframe>
+    <p class="tip">Links open in a new browser tab</p>
 </div>
 <script>
-var history = ['https://www.google.com'];
-var historyIndex = 0;
-
-function go(url) {
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        if (url.includes('.') && !url.includes(' ')) {
-            url = 'https://' + url;
-        } else {
-            url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-        }
-    }
-    document.getElementById('browser-frame').src = url;
-    document.getElementById('url-input').value = url;
-    // Add to history
-    history = history.slice(0, historyIndex + 1);
-    history.push(url);
-    historyIndex = history.length - 1;
-}
-
-function navigate() {
-    var url = document.getElementById('url-input').value.trim();
-    if (url) go(url);
-}
-
-function goBack() {
-    if (historyIndex > 0) {
-        historyIndex--;
-        var url = history[historyIndex];
-        document.getElementById('browser-frame').src = url;
-        document.getElementById('url-input').value = url;
-    }
-}
-
-function goForward() {
-    if (historyIndex < history.length - 1) {
-        historyIndex++;
-        var url = history[historyIndex];
-        document.getElementById('browser-frame').src = url;
-        document.getElementById('url-input').value = url;
-    }
-}
-
-function refresh() {
-    document.getElementById('browser-frame').src = document.getElementById('browser-frame').src;
-}
-
-function goHome() {
-    go('https://www.google.com');
-}
-
-// Update URL bar when iframe navigates (if same-origin)
-document.getElementById('browser-frame').onload = function() {
-    try {
-        var url = this.contentWindow.location.href;
-        document.getElementById('url-input').value = url;
-    } catch(e) {
-        // Cross-origin, can't read URL
-    }
-};
+function go(url){window.open(url,'_blank');}
+function search(){var q=document.getElementById('search-input').value.trim();if(!q)return;var url;if(q.startsWith('http://')||q.startsWith('https://')){url=q;}else if(q.includes('.')&&!q.includes(' ')){url='https://'+q;}else{url='https://www.google.com/search?q='+encodeURIComponent(q);}window.open(url,'_blank');}
 </script>
 </body></html>
 """
