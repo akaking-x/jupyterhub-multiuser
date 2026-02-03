@@ -582,7 +582,7 @@ function transferToJupyter(fileData){
         return;
     }
     var srcPath=fileData.path.replace(/[\\\/][^\\\/]+$/,'');
-    var body={source:'s3',items:[{name:fileData.filename,type:'file'}],source_path:srcPath,dest:'workspace',dest_path:''};
+    var body={source:'s3',items:[fileData.filename],source_path:srcPath,dest:'workspace',dest_path:''};
     // Choose endpoint based on source
     var endpoint='/api/transfer';
     if(fileData.source==='shared')endpoint='/api/shared/transfer';
@@ -620,6 +620,15 @@ function showStatus(msg){
     bar.textContent=msg;
     document.body.appendChild(bar);
     setTimeout(function(){bar.remove();},3000);
+}
+function refreshJupyterLab(){
+    var jw=wins['jupyterlab'];
+    if(jw){
+        var iframe=jw.el.querySelector('iframe');
+        if(iframe&&iframe.contentWindow){
+            iframe.contentWindow.postMessage({type:'jupyterlab:refresh-filebrowser'},'*');
+        }
+    }
 }
 
 // Snap system
@@ -3022,12 +3031,11 @@ function renderMessages(){
                 html+='<button class="btn btn-sm btn-danger" onclick="rejectFile(\\''+fi.file_id+'\\')">Từ chối</button>';
                 html+='</div>';
             }else if(status==='accepted'){
-                // Accepted - show download options (draggable to JupyterLab)
-                html+='<div class="file-actions" draggable="true" ondragstart="startChatFileDrag(event,\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename||'file')+'\\')" ondragend="endChatFileDrag()">';
+                // Accepted - show download options
+                html+='<div class="file-actions">';
                 html+='<a href="/api/chat/file/'+fi.file_id+'" class="btn btn-sm btn-primary" download="'+escapeHtml(fi.filename||'file')+'">Tải xuống</a>';
                 html+='<button class="btn btn-sm btn-secondary" onclick="saveToWorkspace(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ Workspace</button>';
-                html+='<button class="btn btn-sm btn-secondary" onclick="saveToS3(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ S3</button>';
-                html+='<span style="font-size:10px;color:#64748b;margin-left:8px">Kéo thả sang JupyterLab</span>';
+                html+='<button class="btn btn-sm btn-secondary" onclick="sendChatFileToLab(\\''+fi.file_id+'\\',\\''+escapeHtml(fi.filename)+'\\')">→ JupyterLab</button>';
                 html+='</div>';
             }else if(status==='rejected'){
                 html+='<div style="font-size:11px;color:#ef4444;margin-top:6px">Đã từ chối</div>';
@@ -3329,6 +3337,21 @@ function saveToS3(fileId,filename){
     });
 }
 
+function sendChatFileToLab(fileId,filename){
+    fetch('/api/chat/file-to-workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_id:fileId,filename:filename})})
+    .then(r=>r.json()).then(data=>{
+        if(data.success){
+            showModal('Thành công','Đã chuyển vào JupyterLab: '+filename,'success');
+            // Notify parent to refresh JupyterLab
+            if(window.parent&&window.parent.refreshJupyterLab){
+                window.parent.refreshJupyterLab();
+            }
+        }else{
+            showModal('Lỗi',data.error||'Không thể chuyển file','error');
+        }
+    });
+}
+
 // ===== MESSAGE RECALL =====
 function recallMessage(msgId,idx){
     showConfirm('Thu hồi tin nhắn','Bạn muốn thu hồi tin nhắn này?',function(){
@@ -3373,16 +3396,6 @@ function formatTime(iso){
 
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
 function escapeHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');}
-
-// Drag chat files to JupyterLab
-function startChatFileDrag(e,fileId,filename){
-    e.dataTransfer.setData('text/plain',filename);
-    e.dataTransfer.effectAllowed='copy';
-    if(window.parent)window.parent.postMessage({type:'file-drag-start',source:'chat',file_id:fileId,filename:filename},'*');
-}
-function endChatFileDrag(){
-    if(window.parent)window.parent.postMessage({type:'file-drag-end'},'*');
-}
 
 // Start
 init();
