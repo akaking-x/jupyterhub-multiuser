@@ -3610,7 +3610,7 @@ init();
 
 EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
 <style>
@@ -3634,6 +3634,9 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 .header-actions{display:flex;gap:10px;align-items:center}
 .filter-select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer}
 .filter-select:focus{outline:none;border-color:#6366f1}
+.filter-date{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;width:130px}
+.filter-date:focus{outline:none;border-color:#6366f1}
+.filter-date::-webkit-calendar-picker-indicator{filter:invert(1);cursor:pointer}
 .btn-new-task{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s}
 .btn-new-task:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,.4)}
 .todo-list{flex:1;overflow-y:auto;padding:20px 24px}
@@ -3778,6 +3781,14 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
 .file-browser-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;font-weight:600}
 .btn-close-browser{background:none;border:none;color:#64748b;cursor:pointer;font-size:18px}
 .btn-close-browser:hover{color:#ef4444}
+#new-file-browser .file-source-tab{padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;background:#0f172a;color:#94a3b8;border:1px solid #334155;transition:all .2s}
+#new-file-browser .file-source-tab.active{background:#6366f1;color:#fff;border-color:#6366f1}
+#new-file-browser .file-source-tab:hover:not(.active){background:#334155}
+.upload-zone{border:2px dashed #334155;border-radius:10px;padding:30px 20px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover,.upload-zone.dragover{border-color:#6366f1;background:rgba(99,102,241,.1)}
+.upload-zone .icon{font-size:36px;margin-bottom:8px}
+.upload-zone .text{font-size:14px;color:#e2e8f0}
+.upload-zone .hint{font-size:11px;color:#64748b;margin-top:4px}
 
 /* Toast */
 .toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:10px}
@@ -3820,10 +3831,11 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
             <h2 id="header-title">My Tasks</h2>
             <div class="header-actions">
                 <select class="filter-select" id="filter-status" onchange="loadTasks()">
-                    <option value="">All Status</option>
+                    <option value="">All</option>
+                    <option value="not_done">Not Done</option>
                     <option value="pending">Pending</option>
                     <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
+                    <option value="completed">Done</option>
                 </select>
                 <select class="filter-select" id="filter-priority" onchange="loadTasks()">
                     <option value="">All Priority</option>
@@ -3831,6 +3843,8 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                 </select>
+                <input type="date" class="filter-date" id="filter-date-from" onchange="loadTasks()" title="From date">
+                <input type="date" class="filter-date" id="filter-date-to" onchange="loadTasks()" title="To date">
                 <button class="btn-new-task" onclick="showNewTask()"><span>+</span> New Task</button>
             </div>
         </div>
@@ -3902,24 +3916,29 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
                 <div class="new-attachments-section">
                     <div class="new-attachments-list" id="new-attachments-list"></div>
                     <div class="new-attach-buttons">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="showNewAttachBrowser('workspace')">&#128193; Workspace</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="showNewAttachBrowser('s3')">&#9729; S3 Backup</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showNewAttachBrowser('workspace')">&#128193; Browse Files</button>
                     </div>
                 </div>
             </div>
             <div class="new-file-browser" id="new-file-browser" style="display:none">
                 <div class="file-browser-header">
-                    <span id="new-browser-source-label">Workspace</span>
+                    <div class="file-source-tabs" style="display:flex;gap:4px">
+                        <div class="file-source-tab active" data-source="workspace" onclick="switchNewFileSource('workspace')">&#128193; Workspace</div>
+                        <div class="file-source-tab" data-source="s3" onclick="switchNewFileSource('s3')">&#9729; S3</div>
+                        <div class="file-source-tab" data-source="upload" onclick="switchNewFileSource('upload')">&#128228; Upload</div>
+                    </div>
                     <button type="button" class="btn-close-browser" onclick="hideNewFileBrowser()">&times;</button>
                 </div>
-                <div class="file-path-input">
-                    <input type="text" class="form-input" id="new-browse-path" placeholder="/" value="/">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="browseNewPath()">Go</button>
+                <div id="new-file-source-content">
+                    <div class="file-path-input">
+                        <input type="text" class="form-input" id="new-browse-path" placeholder="Path" value="">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="browseNewPath()">Go</button>
+                    </div>
+                    <div class="file-list" id="new-file-list"></div>
                 </div>
-                <div class="file-list" id="new-file-list"></div>
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
                     <button type="button" class="btn btn-secondary btn-sm" onclick="hideNewFileBrowser()">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="addNewAttachments()">Add Selected</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="new-add-btn" onclick="addNewAttachments()">Add Selected</button>
                 </div>
             </div>
         </div>
@@ -3956,6 +3975,55 @@ EMBED_TODO = EMBED_CSS + """<!DOCTYPE html><html><head><title>Todo</title>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="hideAttachModal()">Cancel</button>
             <button class="btn btn-primary" onclick="attachSelected()">Attach Selected</button>
+        </div>
+    </div>
+</div>
+
+<!-- Description Full View Modal -->
+<div class="modal-overlay" id="desc-modal">
+    <div class="modal-box" style="width:800px;max-width:95vw;max-height:90vh">
+        <div class="modal-header">
+            <h3 id="desc-modal-title">Task Description</h3>
+            <button class="modal-close" onclick="hideDescModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height:70vh;overflow:auto">
+            <div class="markdown-content" id="desc-modal-content" style="max-height:none"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="hideDescModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal-box" style="width:400px">
+        <div class="modal-header">
+            <h3>&#9888; Confirm</h3>
+            <button class="modal-close" onclick="hideConfirmModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="confirm-message" style="text-align:center;font-size:14px;margin:0">Are you sure?</p>
+        </div>
+        <div class="modal-footer" style="justify-content:center">
+            <button class="btn btn-secondary" onclick="hideConfirmModal()">Cancel</button>
+            <button class="btn btn-danger" onclick="confirmAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal -->
+<div class="modal-overlay" id="alert-modal">
+    <div class="modal-box" style="width:400px">
+        <div class="modal-header">
+            <h3 id="alert-title">&#8505; Notice</h3>
+            <button class="modal-close" onclick="hideAlertModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="alert-message" style="text-align:center;font-size:14px;margin:0"></p>
+        </div>
+        <div class="modal-footer" style="justify-content:center">
+            <button class="btn btn-primary" onclick="hideAlertModal()">OK</button>
         </div>
     </div>
 </div>
@@ -4006,9 +4074,13 @@ function loadUsers(){
 function loadTasks(){
     var status=document.getElementById('filter-status').value;
     var priority=document.getElementById('filter-priority').value;
+    var dateFrom=document.getElementById('filter-date-from').value;
+    var dateTo=document.getElementById('filter-date-to').value;
     var url='/api/todos?tab='+currentTab;
     if(status)url+='&status='+status;
     if(priority)url+='&priority='+priority;
+    if(dateFrom)url+='&date_from='+dateFrom;
+    if(dateTo)url+='&date_to='+dateTo;
     fetch(url).then(r=>r.json()).then(d=>{
         tasks=d.tasks||[];
         renderTasks();
@@ -4107,46 +4179,137 @@ function removeNewAttachment(idx){
 }
 
 function showNewAttachBrowser(source){
-    newFileSource=source;
+    newFileSource=source||'workspace';
     newSelectedFiles=[];
-    document.getElementById('new-browser-source-label').textContent=source==='s3'?'S3 Backup':'Workspace';
-    document.getElementById('new-browse-path').value='/';
     document.getElementById('new-file-browser').style.display='block';
-    browseNewPath();
+    switchNewFileSource(newFileSource);
 }
 
 function hideNewFileBrowser(){
     document.getElementById('new-file-browser').style.display='none';
 }
 
+function switchNewFileSource(src){
+    newFileSource=src;
+    newSelectedFiles=[];
+    document.querySelectorAll('#new-file-browser .file-source-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('#new-file-browser .file-source-tab[data-source="'+src+'"]').classList.add('active');
+    renderNewFileSource();
+}
+
+function renderNewFileSource(){
+    var container=document.getElementById('new-file-source-content');
+    var addBtn=document.getElementById('new-add-btn');
+    if(newFileSource==='upload'){
+        addBtn.style.display='none';
+        container.innerHTML='<div class="upload-zone" id="new-upload-zone" onclick="document.getElementById(\\'new-upload-input\\').click()"><div class="icon">&#128228;</div><div class="text">Click to select files</div><div class="hint">or drag and drop</div></div><input type="file" id="new-upload-input" multiple style="display:none" onchange="handleNewUpload(this)"><div id="new-upload-dest" style="margin-top:12px"><div style="font-size:12px;color:#94a3b8;margin-bottom:6px">Upload destination:</div><div style="display:flex;gap:6px"><button type="button" class="btn btn-sm '+(newUploadDest==='workspace'?'btn-primary':'btn-secondary')+'" onclick="newUploadDest=\\'workspace\\';renderNewFileSource()">Workspace</button><button type="button" class="btn btn-sm '+(newUploadDest==='s3'?'btn-primary':'btn-secondary')+'" onclick="newUploadDest=\\'s3\\';renderNewFileSource()">S3</button></div><div class="file-path-input" style="margin-top:8px"><input type="text" class="form-input" id="new-upload-path" placeholder="Path (empty for root)" value=""></div></div><div id="new-upload-list"></div>';
+        setupNewUploadDrag();
+    }else{
+        addBtn.style.display='block';
+        container.innerHTML='<div class="file-path-input"><input type="text" class="form-input" id="new-browse-path" placeholder="Path" value=""><button type="button" class="btn btn-secondary btn-sm" onclick="browseNewPath()">Go</button></div><div class="file-list" id="new-file-list"><div style="padding:20px;text-align:center;color:#64748b">Loading...</div></div>';
+        browseNewPath();
+    }
+}
+
+var newUploadDest='workspace';
+var newUploadFiles=[];
+
+function setupNewUploadDrag(){
+    var zone=document.getElementById('new-upload-zone');
+    if(!zone)return;
+    zone.ondragover=function(e){e.preventDefault();zone.classList.add('dragover');};
+    zone.ondragleave=function(){zone.classList.remove('dragover');};
+    zone.ondrop=function(e){e.preventDefault();zone.classList.remove('dragover');handleNewUploadFiles(e.dataTransfer.files);};
+}
+
+function handleNewUpload(input){
+    handleNewUploadFiles(input.files);
+    input.value='';
+}
+
+function handleNewUploadFiles(files){
+    if(!files.length)return;
+    newUploadFiles=Array.from(files);
+    renderNewUploadList();
+}
+
+function renderNewUploadList(){
+    var list=document.getElementById('new-upload-list');
+    if(!newUploadFiles.length){list.innerHTML='';return;}
+    var html='<div style="margin-top:12px;font-size:12px;color:#94a3b8">Files to upload:</div>';
+    newUploadFiles.forEach((f,i)=>{
+        html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #334155"><span style="color:#6366f1">&#128196;</span><span style="flex:1;font-size:13px">'+escapeHtml(f.name)+'</span><span style="color:#64748b;font-size:11px">'+formatSize(f.size)+'</span><button class="btn btn-sm btn-secondary" style="padding:2px 6px" onclick="newUploadFiles.splice('+i+',1);renderNewUploadList()">&times;</button></div>';
+    });
+    html+='<button type="button" class="btn btn-primary btn-sm" style="margin-top:12px;width:100%" onclick="uploadNewFiles()">Upload & Attach '+newUploadFiles.length+' file(s)</button>';
+    list.innerHTML=html;
+}
+
+function formatSize(bytes){
+    if(bytes<1024)return bytes+' B';
+    if(bytes<1024*1024)return (bytes/1024).toFixed(1)+' KB';
+    return (bytes/(1024*1024)).toFixed(1)+' MB';
+}
+
+function uploadNewFiles(){
+    if(!newUploadFiles.length)return;
+    var path=document.getElementById('new-upload-path').value||'';
+    var uploaded=0;
+    var total=newUploadFiles.length;
+    newUploadFiles.forEach(f=>{
+        var form=new FormData();
+        form.append('file',f);
+        form.append('path',path);
+        var url=newUploadDest==='s3'?'/api/s3/upload':'/api/workspace/upload';
+        fetch(url,{method:'POST',body:form}).then(r=>r.json()).then(d=>{
+            uploaded++;
+            if(d.error){showToast('Upload error: '+d.error,'error');return;}
+            var fullPath=path?(path+'/'+f.name):f.name;
+            newAttachments.push({path:fullPath,name:f.name,source:newUploadDest,type:'file'});
+            if(uploaded===total){
+                showToast(total+' file(s) uploaded','success');
+                newUploadFiles=[];
+                renderNewAttachments();
+                hideNewFileBrowser();
+            }
+        }).catch(e=>{
+            uploaded++;
+            showToast('Upload failed: '+e.message,'error');
+        });
+    });
+}
+
 function browseNewPath(){
-    var path=document.getElementById('new-browse-path').value||'/';
+    var path=document.getElementById('new-browse-path').value||'';
     var url=newFileSource==='s3'?'/api/s3/list?path='+encodeURIComponent(path):'/api/workspace/list?path='+encodeURIComponent(path);
     fetch(url).then(r=>r.json()).then(d=>{
         var list=document.getElementById('new-file-list');
+        if(d.error){
+            list.innerHTML='<div style="padding:20px;text-align:center;color:#ef4444">'+escapeHtml(d.error)+'</div>';
+            return;
+        }
         var items=d.files||d.items||[];
         if(!items.length){
             list.innerHTML='<div style="padding:20px;text-align:center;color:#64748b">Empty folder</div>';
             return;
         }
         var html='';
-        if(path!=='/'){
-            var parent=path.split('/').slice(0,-1).join('/')||'/';
+        if(path){
+            var parent=path.split('/').slice(0,-1).join('/')||'';
             html+='<div class="file-item" onclick="document.getElementById(\\'new-browse-path\\').value=\\''+parent+'\\';browseNewPath()"><span class="icon">&#128193;</span><span class="name">..</span></div>';
         }
         items.forEach(f=>{
             var isDir=f.type==='dir'||f.is_dir;
             var icon=isDir?'&#128193;':'&#128196;';
-            var fullPath=(path==='/'?'':path)+'/'+f.name;
+            var fullPath=path?(path+'/'+f.name):f.name;
             var sel=newSelectedFiles.find(x=>x.path===fullPath)?'selected':'';
-            html+='<div class="file-item '+sel+'" onclick="toggleNewFileSelect(\\''+fullPath+'\\',\\''+escapeHtml(f.name)+'\\','+(isDir?'true':'false')+',this)">';
+            html+='<div class="file-item '+sel+'" onclick="toggleNewFileSelect(\\''+escapeHtml(fullPath)+'\\',\\''+escapeHtml(f.name)+'\\','+(isDir?'true':'false')+',this)">';
             html+='<span class="icon">'+icon+'</span><span class="name">'+escapeHtml(f.name)+'</span>';
             if(isDir)html+='<span style="margin-left:auto;color:#64748b;font-size:11px">folder</span>';
             html+='</div>';
         });
         list.innerHTML=html;
     }).catch(e=>{
-        document.getElementById('new-file-list').innerHTML='<div style="padding:20px;text-align:center;color:#ef4444">Error loading</div>';
+        document.getElementById('new-file-list').innerHTML='<div style="padding:20px;text-align:center;color:#ef4444">Error: '+e.message+'</div>';
     });
 }
 
@@ -4233,12 +4396,14 @@ function renderDetail(t){
 
     html+='<div class="detail-section">';
     html+='<div class="detail-section-header"><span>&#128221; Description</span>';
+    html+='<div style="display:flex;gap:6px">';
+    if(t.description)html+='<button onclick="showFullDesc()">View Full</button>';
     if(canEdit)html+='<button onclick="toggleEditDesc()">'+(!editingDesc?'Edit':'Preview')+'</button>';
-    html+='</div>';
+    html+='</div></div>';
     if(editingDesc&&canEdit){
         html+='<textarea class="edit-desc" id="desc-editor" onblur="saveDesc()">'+escapeHtml(t.description||'')+'</textarea>';
     }else{
-        html+='<div class="markdown-content">'+(t.description?marked.parse(t.description):'<em style="color:#64748b">No description</em>')+'</div>';
+        html+='<div class="markdown-content" style="max-height:200px;overflow:auto">'+(t.description?marked.parse(t.description):'<em style="color:#64748b">No description</em>')+'</div>';
     }
     html+='</div>';
 
@@ -4326,12 +4491,42 @@ function toggleStatus(id,current){
     .then(r=>r.json()).then(d=>loadTasks());
 }
 
+var confirmCallback=null;
+
+function showConfirmModal(msg,callback){
+    document.getElementById('confirm-message').textContent=msg;
+    confirmCallback=callback;
+    document.getElementById('confirm-modal').classList.add('show');
+}
+
+function hideConfirmModal(){
+    document.getElementById('confirm-modal').classList.remove('show');
+    confirmCallback=null;
+}
+
+function confirmAction(){
+    hideConfirmModal();
+    if(confirmCallback)confirmCallback();
+}
+
+function showAlertModal(msg,title){
+    document.getElementById('alert-message').textContent=msg;
+    document.getElementById('alert-title').innerHTML=(title||'&#8505; Notice');
+    document.getElementById('alert-modal').classList.add('show');
+}
+
+function hideAlertModal(){
+    document.getElementById('alert-modal').classList.remove('show');
+}
+
 function deleteTask(){
-    if(!currentTask||!confirm('Delete this task?'))return;
-    fetch('/api/todos/'+currentTask._id,{method:'DELETE'}).then(r=>r.json()).then(d=>{
-        closeDetail();
-        loadTasks();
-        showToast('Task deleted','success');
+    if(!currentTask)return;
+    showConfirmModal('Delete this task?',function(){
+        fetch('/api/todos/'+currentTask._id,{method:'DELETE'}).then(r=>r.json()).then(d=>{
+            closeDetail();
+            loadTasks();
+            showToast('Task deleted','success');
+        });
     });
 }
 
@@ -4346,6 +4541,18 @@ function addComment(){
             if(t.task){currentTask=t.task;renderDetail(currentTask);}
         });
     });
+}
+
+function showFullDesc(){
+    if(!currentTask||!currentTask.description)return;
+    var modal=document.getElementById('desc-modal');
+    document.getElementById('desc-modal-title').textContent=currentTask.title;
+    document.getElementById('desc-modal-content').innerHTML=marked.parse(currentTask.description);
+    modal.classList.add('show');
+}
+
+function hideDescModal(){
+    document.getElementById('desc-modal').classList.remove('show');
 }
 
 function downloadTask(){
@@ -4385,7 +4592,6 @@ function showAttachModal(){
     fileSource='workspace';
     document.querySelectorAll('.file-source-tab').forEach(t=>t.classList.remove('active'));
     document.querySelector('.file-source-tab[data-source="workspace"]').classList.add('active');
-    document.getElementById('browse-path').value='/';
     renderFileSource();
     document.getElementById('attach-modal').classList.add('show');
 }
@@ -4394,8 +4600,8 @@ function hideAttachModal(){document.getElementById('attach-modal').classList.rem
 function switchFileSource(src){
     fileSource=src;
     selectedFiles=[];
-    document.querySelectorAll('.file-source-tab').forEach(t=>t.classList.remove('active'));
-    document.querySelector('.file-source-tab[data-source="'+src+'"]').classList.add('active');
+    document.querySelectorAll('#attach-modal .file-source-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('#attach-modal .file-source-tab[data-source="'+src+'"]').classList.add('active');
     renderFileSource();
 }
 
@@ -4404,13 +4610,13 @@ function renderFileSource(){
     if(fileSource==='upload'){
         container.innerHTML='<div class="upload-zone" onclick="document.getElementById(\\'upload-input\\').click()"><div class="icon">&#128228;</div><div class="text">Click to upload file</div></div><input type="file" id="upload-input" style="display:none" onchange="handleUpload(this)">';
     }else{
-        container.innerHTML='<div class="file-path-input"><input type="text" class="form-input" id="browse-path" placeholder="/" value="/"><button class="btn btn-secondary" onclick="browsePath()">Go</button></div><div class="file-list" id="file-list"><div style="padding:20px;text-align:center;color:#64748b">Loading...</div></div>';
+        container.innerHTML='<div class="file-path-input"><input type="text" class="form-input" id="browse-path" placeholder="Path" value=""><button class="btn btn-secondary" onclick="browsePath()">Go</button></div><div class="file-list" id="file-list"><div style="padding:20px;text-align:center;color:#64748b">Loading...</div></div>';
         browsePath();
     }
 }
 
 function browsePath(){
-    var path=document.getElementById('browse-path').value||'/';
+    var path=document.getElementById('browse-path').value||'';
     var url=fileSource==='s3'?'/api/s3/list?path='+encodeURIComponent(path):'/api/workspace/list?path='+encodeURIComponent(path);
     fetch(url).then(r=>r.json()).then(d=>{
         var list=document.getElementById('file-list');
@@ -4420,14 +4626,14 @@ function browsePath(){
             return;
         }
         var html='';
-        if(path!=='/'){
-            var parent=path.split('/').slice(0,-1).join('/')||'/';
+        if(path){
+            var parent=path.split('/').slice(0,-1).join('/')||'';
             html+='<div class="file-item" onclick="document.getElementById(\\'browse-path\\').value=\\''+parent+'\\';browsePath()"><span class="icon">&#128193;</span><span class="name">..</span></div>';
         }
         items.forEach(f=>{
             var isDir=f.type==='dir'||f.is_dir;
             var icon=isDir?'&#128193;':'&#128196;';
-            var fullPath=(path==='/'?'':path)+'/'+f.name;
+            var fullPath=path?(path+'/'+f.name):f.name;
             var sel=selectedFiles.find(x=>x.path===fullPath)?'selected':'';
             html+='<div class="file-item '+sel+'">';
             if(isDir){
@@ -4499,10 +4705,20 @@ function removeAttachment(idx){
 function openAttachment(idx){
     if(!currentTask)return;
     var a=currentTask.attachments[idx];
-    if(a.source==='workspace'){
-        window.open('/user/'+currentUser+'/lab/tree'+a.path,'_blank');
-    }else if(a.source==='s3'){
-        window.open('/api/s3/download?path='+encodeURIComponent(a.path),'_blank');
+    if(a.type==='dir'){
+        showToast('Cannot preview folders','info');
+        return;
+    }
+    // Use parent's file viewer if available
+    if(window.parent&&window.parent.openFileViewer){
+        window.parent.openFileViewer(a.source,a.path,a.name);
+    }else{
+        // Fallback: open directly
+        if(a.source==='workspace'){
+            window.open('/viewer/workspace?path='+encodeURIComponent(a.path),'_blank');
+        }else if(a.source==='s3'){
+            window.open('/viewer/s3?path='+encodeURIComponent(a.path),'_blank');
+        }
     }
 }
 
@@ -5995,9 +6211,34 @@ EMBED_S3_CONFIG = EMBED_CSS + """<!DOCTYPE html><html><head><title>S3 Config</ti
             <div id="test-result" style="margin-top:12px"></div>
         </div>
     </div>
+    <div class="card" style="margin-top:20px">
+        <div class="card-header">
+            <h2>&#128295; Workspace Utilities</h2>
+        </div>
+        <div class="card-body">
+            <p style="color:#666;margin-bottom:12px">Fix file permissions for files that were edited by OnlyOffice. Use this if you get "Permission denied" errors when trying to delete files in JupyterLab.</p>
+            <div style="display:flex;gap:10px;align-items:center">
+                <button type="button" class="btn btn-primary" onclick="fixPermissions()">&#128275; Fix Workspace Permissions</button>
+                <span id="fix-result"></span>
+            </div>
+        </div>
+    </div>
 </div>
 <script>
 function testConn(){var fd=new FormData(document.querySelector('form'));fetch('/user/s3-config/test',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{document.getElementById('test-result').innerHTML='<div class="alert '+(d.success?'alert-success':'alert-error')+'">'+d.message+'</div>';});}
+function fixPermissions(){
+    document.getElementById('fix-result').innerHTML='<span style="color:#6366f1">&#8987; Fixing...</span>';
+    fetch('/api/workspace/fix-permissions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+    .then(r=>r.json())
+    .then(d=>{
+        if(d.success){
+            document.getElementById('fix-result').innerHTML='<span style="color:#22c55e">&#9989; Fixed '+d.fixed+' files/folders</span>';
+        }else{
+            document.getElementById('fix-result').innerHTML='<span style="color:#ef4444">&#10060; '+d.error+'</span>';
+        }
+    })
+    .catch(e=>document.getElementById('fix-result').innerHTML='<span style="color:#ef4444">&#10060; Error: '+e+'</span>');
+}
 </script></body></html>"""
 
 EMBED_CHANGE_PW = EMBED_CSS + """<!DOCTYPE html><html><head><title>Change Password</title></head><body>
@@ -6429,7 +6670,7 @@ VIEWER_MARKDOWN = """<!DOCTYPE html><html><head><title>{{ filename }}</title>
         <div class="code-container" id="raw" style="display:none;padding:16px"><pre style="white-space:pre-wrap;font-family:monospace">{{ content|e }}</pre></div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 <script>
 document.getElementById('rendered').innerHTML=marked.parse({{ content|tojson }});
 let showRaw=false;
@@ -6672,9 +6913,8 @@ def embed_chat():
 
 @app.route('/embed/screen-share')
 def embed_screen_share():
-    if not session.get('user') or session.get('is_admin'):
-        return redirect('/')
-    username = session['user']
+    # Allow guests - use session user or generate guest name
+    username = session.get('user') or f"guest_{secrets.token_hex(4)}"
     return render_template_string(EMBED_SCREEN_SHARE, username=username)
 
 @app.route('/screen-guest')
@@ -6683,11 +6923,22 @@ def screen_guest():
     code = request.args.get('code', '')
     return render_template_string(EMBED_SCREEN_GUEST, code=code)
 
+@app.route('/public/screen-share')
+def public_screen_share():
+    """Public screen share - no login required"""
+    username = session.get('user') or f"guest_{secrets.token_hex(4)}"
+    return render_template_string(EMBED_SCREEN_SHARE, username=username)
+
+@app.route('/public/music-room')
+def public_music_room():
+    """Public music room - no login required"""
+    username = session.get('user') or f"guest_{secrets.token_hex(4)}"
+    return render_template_string(EMBED_MUSIC_ROOM, username=username)
+
 @app.route('/embed/music-room')
 def embed_music_room():
-    if not session.get('user') or session.get('is_admin'):
-        return redirect('/')
-    username = session['user']
+    # Allow guests - use session user or generate guest name
+    username = session.get('user') or f"guest_{secrets.token_hex(4)}"
     return render_template_string(EMBED_MUSIC_ROOM, username=username)
 
 @app.route('/embed/todo')
@@ -6699,8 +6950,7 @@ def embed_todo():
 
 @app.route('/embed/game-hub')
 def embed_game_hub():
-    if not session.get('user') or session.get('is_admin'):
-        return redirect('/')
+    # Allow guests - no login required
     return render_template_string(EMBED_GAME_HUB)
 
 
@@ -6712,16 +6962,12 @@ BALATRO_DIR = '/opt/jupyterhub/static/balatro'
 
 @app.route('/balatro/')
 def balatro_index():
-    """Serve Balatro game"""
-    if not session.get('user'):
-        return redirect('/')
+    """Serve Balatro game - no login required"""
     return send_from_directory(BALATRO_DIR, 'index.html')
 
 @app.route('/balatro/<path:filename>')
 def balatro_static(filename):
-    """Serve Balatro static files"""
-    if not session.get('user'):
-        return 'Unauthorized', 401
+    """Serve Balatro static files - no login required"""
     return send_from_directory(BALATRO_DIR, filename)
 
 
@@ -7181,6 +7427,73 @@ def api_ws_upload():
     if ok:
         return jsonify({'success': True, 'filename': result})
     return jsonify({'error': result})
+
+
+@app.route('/api/workspace/fix-permissions', methods=['POST'])
+def api_ws_fix_permissions():
+    """Fix file permissions for files edited by OnlyOffice"""
+    if not session.get('user') or session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    username = session['user']
+    data = request.json or {}
+    path = data.get('path', '')  # Optional: specific path, or fix all
+
+    workspace_root = f"/home/{username}/workspace"
+    fixed_count = 0
+    errors = []
+
+    try:
+        import pwd
+        try:
+            user_info = pwd.getpwnam(username)
+            target_uid = user_info.pw_uid
+            target_gid = user_info.pw_gid
+        except KeyError:
+            # User not found in passwd, try numeric fallback
+            target_uid = 1000
+            target_gid = 1000
+
+        if path:
+            # Fix specific file/directory
+            full_path = os.path.join(workspace_root, path.lstrip('/'))
+            if os.path.exists(full_path):
+                try:
+                    os.chown(full_path, target_uid, target_gid)
+                    os.chmod(full_path, 0o644 if os.path.isfile(full_path) else 0o755)
+                    fixed_count = 1
+                except Exception as e:
+                    errors.append(f"{path}: {str(e)}")
+        else:
+            # Fix all files in workspace
+            for root, dirs, files in os.walk(workspace_root):
+                # Fix directories
+                for d in dirs:
+                    dir_path = os.path.join(root, d)
+                    try:
+                        os.chown(dir_path, target_uid, target_gid)
+                        os.chmod(dir_path, 0o755)
+                        fixed_count += 1
+                    except Exception as e:
+                        rel_path = os.path.relpath(dir_path, workspace_root)
+                        errors.append(f"{rel_path}: {str(e)}")
+                # Fix files
+                for f in files:
+                    file_path = os.path.join(root, f)
+                    try:
+                        os.chown(file_path, target_uid, target_gid)
+                        os.chmod(file_path, 0o644)
+                        fixed_count += 1
+                    except Exception as e:
+                        rel_path = os.path.relpath(file_path, workspace_root)
+                        errors.append(f"{rel_path}: {str(e)}")
+
+        return jsonify({
+            'success': True,
+            'fixed': fixed_count,
+            'errors': errors[:10] if errors else []  # Limit error list
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/api/s3/upload', methods=['POST'])
 def api_s3_upload():
@@ -8074,8 +8387,33 @@ def onlyoffice_callback():
                 # Save to workspace
                 workspace_path = f"/home/{username}/workspace/{path}"
                 os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
+
+                # Preserve original file ownership
+                original_uid = None
+                original_gid = None
+                if os.path.exists(workspace_path):
+                    stat_info = os.stat(workspace_path)
+                    original_uid = stat_info.st_uid
+                    original_gid = stat_info.st_gid
+
                 with open(workspace_path, 'wb') as f:
                     f.write(file_data)
+
+                # Restore original ownership if file existed
+                if original_uid is not None and original_gid is not None:
+                    try:
+                        os.chown(workspace_path, original_uid, original_gid)
+                    except Exception as e:
+                        app.logger.warning(f"Could not restore file ownership: {e}")
+                else:
+                    # New file - set ownership to user (try to find user's uid)
+                    try:
+                        import pwd
+                        user_info = pwd.getpwnam(username)
+                        os.chown(workspace_path, user_info.pw_uid, user_info.pw_gid)
+                    except Exception as e:
+                        app.logger.warning(f"Could not set file ownership for new file: {e}")
+
                 app.logger.info(f"Saved to workspace: {workspace_path}")
 
             elif source == 's3':
@@ -9665,22 +10003,45 @@ def api_todos_list():
 
         # Apply filters
         if status:
-            query['status'] = status
+            if status == 'not_done':
+                query['status'] = {'$ne': 'completed'}
+            else:
+                query['status'] = status
         if priority:
             query['priority'] = priority
 
+        # Date filters (filter by due_date)
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        date_filter = {}
+        if date_from:
+            try:
+                date_filter['$gte'] = datetime.fromisoformat(date_from)
+            except:
+                pass
+        if date_to:
+            try:
+                date_filter['$lte'] = datetime.fromisoformat(date_to + 'T23:59:59')
+            except:
+                pass
+        if date_filter:
+            query['due_date'] = date_filter
+
         tasks = list(db.todos.find(query).sort('created_at', -1).limit(100))
 
-        # Convert ObjectId to string
+        # Convert ObjectId to string and serialize dates
         for t in tasks:
             t['_id'] = str(t['_id'])
-            for key in ['created_at', 'updated_at', 'completed_at', 'due_date']:
+            for key in ['created_at', 'updated_at', 'completed_at', 'start_date', 'due_date']:
                 if t.get(key) and hasattr(t[key], 'isoformat'):
                     t[key] = t[key].isoformat()
             # Convert comment dates
             for c in t.get('comments', []):
                 if c.get('created_at') and hasattr(c['created_at'], 'isoformat'):
                     c['created_at'] = c['created_at'].isoformat()
+            # Ensure attachments exists
+            if 'attachments' not in t:
+                t['attachments'] = []
 
         # Get counts for each tab
         counts = {
@@ -9715,7 +10076,10 @@ def api_todos_create():
             'description': data.get('description', '').strip(),
             'priority': data.get('priority', 'medium'),
             'status': data.get('status', 'pending'),
+            'start_date': datetime.fromisoformat(data['start_date']) if data.get('start_date') else None,
             'due_date': datetime.fromisoformat(data['due_date']) if data.get('due_date') else None,
+            'link': data.get('link', '').strip() or None,
+            'attachments': data.get('attachments') or [],
             'comments': [],
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
@@ -9766,12 +10130,15 @@ def api_todos_get(task_id):
             return jsonify({'error': 'Unauthorized'}), 403
 
         task['_id'] = str(task['_id'])
-        for key in ['created_at', 'updated_at', 'completed_at', 'due_date']:
+        for key in ['created_at', 'updated_at', 'completed_at', 'start_date', 'due_date']:
             if task.get(key) and hasattr(task[key], 'isoformat'):
                 task[key] = task[key].isoformat()
         for c in task.get('comments', []):
             if c.get('created_at') and hasattr(c['created_at'], 'isoformat'):
                 c['created_at'] = c['created_at'].isoformat()
+        # Ensure attachments field exists
+        if 'attachments' not in task:
+            task['attachments'] = []
 
         return jsonify({'task': task})
     except Exception as e:
@@ -9797,10 +10164,10 @@ def api_todos_update(task_id):
             return jsonify({'error': 'Unauthorized'}), 403
 
         update = {'$set': {'updated_at': datetime.utcnow()}}
-        if 'title' in data:
+        if 'title' in data and data['title']:
             update['$set']['title'] = data['title'].strip()
         if 'description' in data:
-            update['$set']['description'] = data['description'].strip()
+            update['$set']['description'] = (data['description'] or '').strip()
         if 'priority' in data:
             update['$set']['priority'] = data['priority']
         if 'status' in data:
@@ -9809,8 +10176,14 @@ def api_todos_update(task_id):
                 update['$set']['completed_at'] = datetime.utcnow()
         if 'assignee' in data:
             update['$set']['assignee'] = data['assignee']
+        if 'start_date' in data:
+            update['$set']['start_date'] = datetime.fromisoformat(data['start_date']) if data['start_date'] else None
         if 'due_date' in data:
             update['$set']['due_date'] = datetime.fromisoformat(data['due_date']) if data['due_date'] else None
+        if 'link' in data:
+            update['$set']['link'] = data['link'].strip() if data['link'] else None
+        if 'attachments' in data:
+            update['$set']['attachments'] = data['attachments'] or []
 
         db.todos.update_one({'_id': task_id}, update)
 
